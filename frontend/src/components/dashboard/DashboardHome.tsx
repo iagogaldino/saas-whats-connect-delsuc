@@ -261,7 +261,7 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
     setStoredApiBase(apiBase);
     setSendLoading(true);
     try {
-      const res = await sendCode(instanceId, { phoneNumber: digitsPhone, code: codeTrimmed });
+      const res = await sendCode(instanceId, { phoneNumber: digitsPhone, message: codeTrimmed });
       setResponseLog(JSON.stringify({ ok: true, status: 200, body: res }, null, 2));
     } catch (err) {
       const e = err as Error & { status?: number; details?: unknown };

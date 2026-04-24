@@ -13,11 +13,11 @@ export const sendCodeBodySchema = z.object({
         .string()
         .regex(/^\d{10,15}$/, 'phoneNumber deve conter 10 a 15 dígitos (DDI + número)')
     ),
-  code: z
+  message: z
     .string()
     .trim()
-    .min(1, 'code não pode ser vazio')
-    .max(200, 'code deve ter no máximo 200 caracteres'),
+    .min(1, 'message não pode ser vazio')
+    .max(200, 'message deve ter no máximo 200 caracteres'),
 });
 
 export type SendCodeBody = z.infer<typeof sendCodeBodySchema>;

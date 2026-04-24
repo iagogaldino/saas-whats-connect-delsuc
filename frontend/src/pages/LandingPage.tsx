@@ -9,12 +9,12 @@ const featureCols = [
         d: 'Persistência de estado de conexão e múltiplas instâncias simultâneas.',
       },
       {
-        t: 'QR Dynamic Generation',
-        d: 'Geração de tokens de autenticação em tempo real para pareamento rápido.',
+        t: 'QR Pairing em Tempo Real',
+        d: 'Geração de QR dinâmico para conectar e reconectar sessões com rapidez.',
       },
       {
-        t: 'Message Queuing',
-        d: 'Fila inteligente para garantir a entrega de mensagens sem bloqueios.',
+        t: 'Envio de Mensagens Livres',
+        d: 'Envie qualquer texto via API, sem limitação ao fluxo de OTP.',
       },
     ],
   },
@@ -28,8 +28,8 @@ const featureCols = [
         d: 'Visão completa da saúde das instâncias e volume de tráfego.',
       },
       {
-        t: 'Real-time Controls',
-        d: 'Interfira em fluxos de mensagens e gerencie webhooks on-the-fly.',
+        t: 'Controles em Tempo Real',
+        d: 'Ligue ou desligue instâncias e controle o canal de escuta em segundos.',
       },
       {
         t: 'Advanced Logs',
@@ -42,8 +42,8 @@ const featureCols = [
 const steps = [
   ['01', 'Login Seguro', 'Acesse o painel administrativo usando suas credenciais criptografadas.'],
   ['02', 'QR Pairing', 'Escaneie o código dinâmico para conectar sua instância do WhatsApp.'],
-  ['03', 'Message API', 'Comece a disparar mensagens, notificações e respostas automatizadas via API.'],
-  ['04', 'Socket Listening', 'Escute eventos em tempo real como mensagens recebidas e status.'],
+  ['03', 'Envio de Mensagens', 'Dispare qualquer mensagem via API para clientes, suporte e operações.'],
+  ['04', 'Listener em Tempo Real', 'Escute eventos de mensagens recebidas e status para integrações externas.'],
 ] as const;
 
 export function LandingPage() {
@@ -82,8 +82,8 @@ export function LandingPage() {
               <span className="text-primary-container">Comunicação Programável</span>
             </h1>
             <p className="mb-10 max-w-xl text-lg leading-relaxed text-on-surface-variant md:text-xl">
-              Infraestrutura de alta performance para escalar sua comunicação. Integre via Socket.IO ou REST API com
-              segurança e isolamento total.
+              Plataforma para operar múltiplas instâncias, enviar qualquer mensagem via REST API e receber eventos em
+              tempo real com Socket.IO, com segurança e isolamento por usuário.
             </p>
             <div className="flex flex-wrap gap-4">
               <a href="/login" className="flex items-center gap-2 rounded-xl bg-primary px-8 py-4 font-bold text-on-primary">
@@ -108,7 +108,7 @@ export function LandingPage() {
 POST /api/v1/auth/instances/<instanceId>/send-code
 {
   "phoneNumber": "5511999999999",
-  "code": "Olá! Mensagem enviada pela API."
+  "message": "Olá! Esta é uma mensagem livre enviada pela API."
 }
 
 // Response 200 OK
@@ -134,7 +134,8 @@ POST /api/v1/auth/instances/<instanceId>/send-code
           <div className="mb-16 text-center">
             <h2 className="font-headline mb-4 text-4xl font-extrabold">Arquitetura de Duas Camadas</h2>
             <p className="mx-auto max-w-2xl text-on-surface-variant">
-              Desenvolvido para robustez máxima e experiência de desenvolvedor fluida.
+              Construído para operação contínua, controle por instância e integração simples para qualquer tipo de
+              mensagem.
             </p>
           </div>
           <div className="grid gap-8 md:grid-cols-2">
@@ -167,7 +168,7 @@ POST /api/v1/auth/instances/<instanceId>/send-code
         <div className="mx-auto max-w-7xl px-6">
           <div className="mb-16">
             <h2 className="font-headline mb-4 text-4xl font-extrabold">Fluxo de Integração</h2>
-            <p className="text-on-surface-variant">Do zero ao envio da primeira mensagem em minutos.</p>
+            <p className="text-on-surface-variant">Do login ao envio da primeira mensagem livre em minutos.</p>
           </div>
           <div className="grid gap-6 md:grid-cols-4">
             {steps.map(([n, title, desc], i) => (
@@ -196,8 +197,8 @@ POST /api/v1/auth/instances/<instanceId>/send-code
             </span>
             <h2 className="font-headline mb-6 text-4xl font-extrabold">Interatividade em Milissegundos</h2>
             <p className="mb-8 text-lg leading-relaxed text-primary-fixed-dim">
-              Esqueça o polling. Receba eventos instantâneos através da nossa arquitetura Socket.IO ou integre webhooks
-              em sua aplicação externa.
+              Esqueça o polling. Envie mensagens via REST, acompanhe estados de entrega e consuma eventos instantâneos
+              com Socket.IO na sua aplicação.
             </p>
             <div className="space-y-4">
               <div className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/5 p-4">
@@ -229,7 +230,7 @@ POST /api/v1/auth/instances/<instanceId>/send-code
               </div>
               <div className="rounded-lg border-l-2 border-primary-fixed bg-white/5 p-3">
                 <span className="text-slate-500">[14:02:45]</span> <span className="text-primary-fixed">SENT:</span>{' '}
-                {'{ to: "5511...", text: "Automated response" }'}
+                {'{ to: "5511...", text: "Mensagem enviada via API" }'}
               </div>
               <div className="rounded-lg border-l-2 border-amber-400 bg-white/5 p-3">
                 <span className="text-slate-500">[14:03:02]</span> <span className="text-amber-400">STATUS:</span>{' '}
@@ -281,7 +282,7 @@ POST /api/v1/auth/instances/<instanceId>/send-code
         <div className="mx-auto max-w-7xl overflow-hidden rounded-3xl bg-primary p-12 text-center text-on-primary">
           <h2 className="font-headline mb-6 text-3xl font-extrabold md:text-5xl">Domine sua comunicação em escala global</h2>
           <p className="mx-auto mb-10 max-w-3xl text-lg text-primary-fixed">
-            Centralize o controle, garanta a autenticação e tenha rastreabilidade total em cada byte enviado.
+            Centralize instâncias, envie qualquer mensagem e tenha rastreabilidade ponta a ponta em cada envio.
           </p>
           <div className="flex flex-col justify-center gap-4 sm:flex-row">
             <a href="/login" className="rounded-xl bg-tertiary-fixed px-10 py-4 font-bold text-on-tertiary-fixed">

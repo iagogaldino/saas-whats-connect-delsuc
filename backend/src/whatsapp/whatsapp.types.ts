@@ -16,7 +16,7 @@
  *
  * ## POST /api/v1/auth/send-code
  * - Auth: Bearer
- * - Body: `{ phoneNumber, code }` (validação zod existente)
+ * - Body: `{ phoneNumber, message }` (validação zod existente)
  * - 200: `{ ok: true, message: 'Código enviado' }`
  * - Erros via AppError: 400 (número inválido / sem WhatsApp), 503 (sessão não pronta / serviço indisponível)
  */

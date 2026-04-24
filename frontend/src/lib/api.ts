@@ -30,7 +30,7 @@ export type ListeningStatusResponse = {
 
 export type SendCodeBody = {
   phoneNumber: string;
-  code: string;
+  message: string;
 };
 
 export type ApiErrorBody = {

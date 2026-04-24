@@ -119,18 +119,18 @@ export function createAuthRouter(whatsappSessions: IWhatsAppSessionService): Rou
         return next(parsed.error);
       }
 
-      const { phoneNumber, code } = parsed.data;
+      const { phoneNumber, message } = parsed.data;
       const userId = req.user!.id;
       const instanceId = req.instance!.id;
 
       try {
-        await whatsappSessions.sendOtp(userId, instanceId, phoneNumber, code);
-        await recordSend(userId, instanceId, phoneNumber, 'success', undefined, code).catch(() => {
+        await whatsappSessions.sendOtp(userId, instanceId, phoneNumber, message);
+        await recordSend(userId, instanceId, phoneNumber, 'success', undefined, message).catch(() => {
           /* não falha a resposta HTTP se o log em DB falhar */
         });
         res.status(200).json({ ok: true, message: 'Código enviado' });
       } catch (sendErr) {
-        await recordSend(userId, instanceId, phoneNumber, 'failed', formatSendError(sendErr), code).catch(() => {
+        await recordSend(userId, instanceId, phoneNumber, 'failed', formatSendError(sendErr), message).catch(() => {
           /* idem */
         });
         next(sendErr);

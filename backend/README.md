@@ -66,7 +66,7 @@ Corpo JSON:
 ```json
 {
   "phoneNumber": "5511999999999",
-  "code": "123456"
+  "message": "Sua solicitação foi recebida"
 }
 ```
 

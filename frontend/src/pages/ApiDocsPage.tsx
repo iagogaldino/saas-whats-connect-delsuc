@@ -40,7 +40,7 @@ export function ApiDocsPage() {
           <h1 className="text-on-surface text-lg font-bold tracking-tight">API Docs</h1>
           <div className="flex items-center">
             <a
-              href="/app"
+              href="/"
               className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-on-primary transition-opacity hover:opacity-90"
             >
               Inicio
@@ -88,7 +88,7 @@ GET  ${base}/api/v1/instances/<instanceId>/whatsapp/qr`}</CodeBlock>
           </p>
           <p>
             <code className="font-mono text-xs">phoneNumber</code>: 10 a 15 dígitos.{' '}
-            <code className="font-mono text-xs">code</code>: conteúdo da mensagem (1 a 200 caracteres).
+            <code className="font-mono text-xs">message</code>: conteúdo da mensagem (1 a 200 caracteres).
           </p>
           <CodeBlock>{`POST ${base}/api/v1/auth/instances/<instanceId>/send-code
 Authorization: Bearer <token>
@@ -96,7 +96,7 @@ Content-Type: application/json
 
 {
   "phoneNumber": "5511999999999",
-  "code": "Olá! Sua solicitação foi recebida e já está em atendimento."
+  "message": "Olá! Sua solicitação foi recebida e já está em atendimento."
 }`}</CodeBlock>
           <p className="text-outline text-xs">
             200: mensagem enviada. 400: validação/número sem WhatsApp. 503: sessão não conectada.
@@ -133,13 +133,6 @@ socket.on('whatsapp.message.received', (payload) => {
           </p>
         </Section>
 
-        <div className="rounded-xl border border-amber-200/80 bg-amber-50/90 p-4 text-sm text-amber-950/90">
-          <p className="font-bold">Aviso</p>
-          <p className="mt-1 text-xs leading-relaxed">
-            Automação no WhatsApp Web pode conflitar com os termos de serviço do WhatsApp.
-            Use com responsabilidade, preferencialmente em desenvolvimento/homologação.
-          </p>
-        </div>
       </div>
     </div>
   );
