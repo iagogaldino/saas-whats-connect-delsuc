@@ -10,6 +10,9 @@ import {
   startListeningMessagesForInstance,
   stopListeningMessagesForInstance,
   startWhatsAppPairingForInstance,
+  fetchWebhookConfigForInstance,
+  putWebhookConfigForInstance,
+  postWebhookTestForInstance,
 } from '../../lib/api';
 import { getStoredApiBase, setStoredApiBase } from '../../lib/config';
 import { validateCode, validatePhone } from '../../lib/validation';
@@ -48,6 +51,14 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
   const [listeningClients, setListeningClients] = useState(0);
   const [listeningLoading, setListeningLoading] = useState(false);
   const [listeningError, setListeningError] = useState<string | null>(null);
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [webhookEnabled, setWebhookEnabled] = useState(false);
+  const [webhookSecretLast4, setWebhookSecretLast4] = useState<string | null>(null);
+  const [webhookHasSecret, setWebhookHasSecret] = useState(false);
+  const [webhookRevealedSecret, setWebhookRevealedSecret] = useState<string | null>(null);
+  const [webhookLoadError, setWebhookLoadError] = useState<string | null>(null);
+  const [webhookSaveLoading, setWebhookSaveLoading] = useState(false);
+  const [webhookTestLoading, setWebhookTestLoading] = useState(false);
   const [lastSync, setLastSync] = useState<string>('—');
 
   const [responseLog, setResponseLog] = useState<string>(
@@ -112,7 +123,20 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
     } catch (e) {
       setListeningError(e instanceof Error ? e.message : 'Falha ao consultar canal');
     }
-  }, []);
+  }, [instanceId]);
+
+  const loadWebhookConfig = useCallback(async () => {
+    setWebhookLoadError(null);
+    try {
+      const data = await fetchWebhookConfigForInstance(instanceId);
+      setWebhookUrl(data.url ?? '');
+      setWebhookEnabled(data.enabled);
+      setWebhookSecretLast4(data.secretLast4);
+      setWebhookHasSecret(data.hasSecret);
+    } catch (e) {
+      setWebhookLoadError(e instanceof Error ? e.message : 'Falha ao carregar webhook');
+    }
+  }, [instanceId]);
 
   useEffect(() => {
     void loadHealth();
@@ -127,14 +151,19 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
   }, [loadListeningStatus]);
 
   useEffect(() => {
+    void loadWebhookConfig();
+  }, [loadWebhookConfig]);
+
+  useEffect(() => {
     const onRefresh = () => {
       void loadHealth();
       void loadWhatsAppStatus();
       void loadListeningStatus();
+      void loadWebhookConfig();
     };
     window.addEventListener('otp-monitor:refresh-health', onRefresh);
     return () => window.removeEventListener('otp-monitor:refresh-health', onRefresh);
-  }, [loadHealth, loadWhatsAppStatus, loadListeningStatus]);
+  }, [loadHealth, loadWhatsAppStatus, loadListeningStatus, loadWebhookConfig]);
 
   useEffect(() => {
     if (apiOnline !== true) return;
@@ -148,7 +177,7 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
     } catch {
       setQrPayload(null);
     }
-  }, []);
+  }, [instanceId]);
 
   const pairingPoll =
     apiOnline === true &&
@@ -218,10 +247,56 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
         : await startListeningMessagesForInstance(instanceId);
       setListeningEnabled(data.enabled);
       setListeningClients(data.connectedClients);
+      void loadWebhookConfig();
     } catch (e) {
       setListeningError(e instanceof Error ? e.message : 'Falha ao alterar estado do canal');
     } finally {
       setListeningLoading(false);
+    }
+  }
+
+  async function handleSaveWebhook(regenerateSecret: boolean) {
+    setWebhookSaveLoading(true);
+    setWebhookLoadError(null);
+    try {
+      const res = await putWebhookConfigForInstance(instanceId, {
+        url: webhookUrl.trim(),
+        enabled: webhookEnabled,
+        regenerateSecret,
+      });
+      setWebhookUrl(res.config.url ?? '');
+      setWebhookEnabled(res.config.enabled);
+      setWebhookSecretLast4(res.config.secretLast4);
+      setWebhookHasSecret(res.config.hasSecret);
+      if (res.secret) {
+        setWebhookRevealedSecret(res.secret);
+      }
+      if (res.config.enabled) {
+        void loadListeningStatus();
+      }
+    } catch (e) {
+      setWebhookLoadError(e instanceof Error ? e.message : 'Falha ao guardar');
+    } finally {
+      setWebhookSaveLoading(false);
+    }
+  }
+
+  async function handleTestWebhook() {
+    setWebhookTestLoading(true);
+    setWebhookLoadError(null);
+    try {
+      const res = await postWebhookTestForInstance(instanceId);
+      setResponseLog(
+        JSON.stringify(
+          { ok: res.ok, status: res.status, info: 'Resposta do servidor ao testar o webhook' },
+          null,
+          2
+        )
+      );
+    } catch (e) {
+      setWebhookLoadError(e instanceof Error ? e.message : 'Falha no teste');
+    } finally {
+      setWebhookTestLoading(false);
     }
   }
 
@@ -682,7 +757,8 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
             </div>
 
             <p className="text-outline text-xs leading-relaxed">
-              Abra um canal Socket.IO para aplicações externas receberem mensagens recebidas em tempo real.
+              Abra um canal Socket.IO para aplicações externas receberem mensagens recebidas em tempo real. Apenas um modo
+              de receção por instância: se ativar isto, o <strong>webhook</strong> é desligado automaticamente.
             </p>
             <p className="text-outline mt-3 text-[11px]">
               Clientes conectados: <span className="font-semibold text-slate-700">{listeningClients}</span>
@@ -713,6 +789,108 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
                 className="border-outline-variant text-outline rounded-lg border px-4 py-2 text-xs font-bold uppercase tracking-wide"
               >
                 Atualizar
+              </button>
+            </div>
+          </section>
+
+          <section className="bg-surface-container-low relative overflow-hidden rounded-xl p-6">
+            <div className="mb-4 flex items-start justify-between">
+              <h2 className="text-primary-dim text-xs font-bold uppercase tracking-widest">Webhook</h2>
+              <span
+                className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
+                  webhookEnabled && webhookUrl.trim().length > 0
+                    ? 'bg-emerald-100 text-emerald-900 ring-1 ring-emerald-200/80'
+                    : 'bg-slate-200 text-slate-700 ring-1 ring-slate-300/70'
+                }`}
+              >
+                {webhookEnabled && webhookUrl.trim().length > 0 ? 'Ativo' : 'Inativo'}
+              </span>
+            </div>
+            <p className="text-outline text-xs leading-relaxed">
+              Receba mensagens no seu endpoint com <span className="font-mono">POST</span> (JSON) sempre que
+              chegar uma mensagem. Apenas um modo por instância: ao <strong>ativar o webhook</strong>, o Message Listener
+              (Socket) é desligado automaticamente. Em produção use <span className="font-mono">https://</span>.
+            </p>
+            {webhookHasSecret && webhookSecretLast4 && (
+              <p className="text-outline mt-2 text-[11px]">
+                Segredo (sufixo): <span className="font-mono font-semibold text-slate-600">…{webhookSecretLast4}</span>
+              </p>
+            )}
+            {webhookRevealedSecret && (
+              <div className="bg-amber-50 border-amber-200/80 mt-3 rounded-lg border p-3 text-xs text-amber-950">
+                <p className="font-semibold">Guarde o segredo agora — não será mostrado de novo.</p>
+                <p className="mt-1 break-all font-mono text-[11px]">{webhookRevealedSecret}</p>
+                <button
+                  type="button"
+                  className="mt-2 text-[10px] font-bold uppercase text-amber-900 underline"
+                  onClick={() => void navigator.clipboard.writeText(webhookRevealedSecret)}
+                >
+                  Copiar segredo
+                </button>
+              </div>
+            )}
+            <div className="mt-4 space-y-3">
+              <label className="block">
+                <span className="text-outline mb-1 block text-[10px] font-bold uppercase">URL do webhook</span>
+                <input
+                  type="url"
+                  className="border-outline-variant focus:ring-primary/30 w-full rounded-lg border bg-white px-3 py-2 text-sm outline-none focus:ring-2"
+                  value={webhookUrl}
+                  onChange={(e) => setWebhookUrl(e.target.value)}
+                  placeholder="https://seu-servidor.com/webhook"
+                  autoComplete="off"
+                />
+              </label>
+              <label className="flex cursor-pointer items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300"
+                  checked={webhookEnabled}
+                  onChange={(e) => setWebhookEnabled(e.target.checked)}
+                />
+                <span className="text-outline text-sm">Ativar envio para esta URL</span>
+              </label>
+            </div>
+            {webhookLoadError && (
+              <p className="mt-3 rounded-lg bg-error/10 px-3 py-2 text-xs text-error" role="alert">
+                {webhookLoadError}
+              </p>
+            )}
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void handleSaveWebhook(false)}
+                disabled={webhookSaveLoading}
+                className="bg-primary text-on-primary rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wide disabled:opacity-60"
+              >
+                {webhookSaveLoading ? 'A guardar…' : 'Guardar'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm('Gera um novo segredo. O anterior deixa de funcionar. Continuar?')) {
+                    void handleSaveWebhook(true);
+                  }
+                }}
+                disabled={webhookSaveLoading}
+                className="border-outline-variant text-outline rounded-lg border px-4 py-2 text-xs font-bold uppercase tracking-wide disabled:opacity-60"
+              >
+                Regenerar segredo
+              </button>
+              <button
+                type="button"
+                onClick={() => void loadWebhookConfig()}
+                className="border-outline-variant text-outline rounded-lg border px-4 py-2 text-xs font-bold uppercase tracking-wide"
+              >
+                Atualizar
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleTestWebhook()}
+                disabled={webhookTestLoading}
+                className="border-outline-variant text-outline rounded-lg border px-4 py-2 text-xs font-bold uppercase tracking-wide disabled:opacity-60"
+              >
+                {webhookTestLoading ? 'A testar…' : 'Testar envio'}
               </button>
             </div>
           </section>

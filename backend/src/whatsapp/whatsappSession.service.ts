@@ -7,6 +7,8 @@ import type {
 } from './whatsapp.types';
 import { WhatsAppUserSession } from './whatsappUserSession';
 import { SocketGateway } from '../realtime/socketGateway';
+import { WebhookDispatcher } from '../realtime/webhookDispatcher';
+import { disableWebhookDeliveryForInstance } from '../services/instance.service';
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -27,7 +29,8 @@ export class WhatsAppSessionService implements IWhatsAppSessionService {
   constructor(
     private readonly log: Logger,
     private readonly options: WhatsAppSessionServiceBootstrapOptions,
-    private readonly socketGateway: SocketGateway
+    private readonly socketGateway: SocketGateway,
+    private readonly webhookDispatcher: WebhookDispatcher
   ) {}
 
   private sessionKey(userId: string, instanceId: string): string {
@@ -41,8 +44,10 @@ export class WhatsAppSessionService implements IWhatsAppSessionService {
       instanceId,
       dataPath,
       connectTimeoutMs: this.options.connectTimeoutMs,
-      onIncomingMessage: (payload) =>
-        this.socketGateway.emitIncomingMessage(userId, instanceId, payload),
+      onIncomingMessage: (payload) => {
+        this.socketGateway.emitIncomingMessage(userId, instanceId, payload);
+        this.webhookDispatcher.deliver(userId, instanceId, payload);
+      },
     });
   }
 
@@ -143,11 +148,14 @@ export class WhatsAppSessionService implements IWhatsAppSessionService {
     return this.socketGateway.getListeningStatus(userId, instanceId);
   }
 
-  setListeningEnabled(
+  async setListeningEnabled(
     userId: string,
     instanceId: string,
     enabled: boolean
   ): Promise<{ enabled: boolean; connectedClients: number }> {
+    if (enabled) {
+      await disableWebhookDeliveryForInstance(userId, instanceId);
+    }
     return this.socketGateway.setListeningEnabled(userId, instanceId, enabled);
   }
 }

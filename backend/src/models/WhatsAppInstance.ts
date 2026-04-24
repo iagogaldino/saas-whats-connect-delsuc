@@ -26,6 +26,22 @@ const whatsAppInstanceSchema = new mongoose.Schema(
       required: true,
       default: false,
     },
+    webhookUrl: {
+      type: String,
+      default: '',
+      trim: true,
+      maxlength: 2048,
+    },
+    webhookEnabled: {
+      type: Boolean,
+      required: true,
+      default: false,
+    },
+    webhookSecret: {
+      type: String,
+      default: '',
+      maxlength: 128,
+    },
   },
   { timestamps: true }
 );

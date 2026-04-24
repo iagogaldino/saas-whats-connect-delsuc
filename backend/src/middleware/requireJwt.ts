@@ -11,7 +11,7 @@ function getBearer(req: Request): string | null {
   return header.slice(7).trim();
 }
 
-/** Apenas JWT de sessão (login). Chaves de API (`otp_…`) são rejeitadas — uso em gestão de chaves e operações exclusivas de painel. */
+/** Apenas JWT de sessão (login). Chaves de API (`otp_…`) são rejeitadas — p.ex. gestão de chaves, escuta em tempo real (listening). Listar/criar instâncias e WhatsApp usam `requireAuth` (JWT ou API key). */
 export function requireJwt(req: Request, _res: Response, next: NextFunction): void {
   void (() => {
     try {

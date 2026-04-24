@@ -6,6 +6,7 @@ import { connectDatabase } from './config/database';
 import { createLogger } from './config/logger';
 import { createApp } from './app';
 import { SocketGateway } from './realtime/socketGateway';
+import { WebhookDispatcher } from './realtime/webhookDispatcher';
 import {
   getRealtimeListeningEnabled,
   setRealtimeListeningEnabled,
@@ -30,6 +31,7 @@ log.info(
 
 const isProd = process.env.NODE_ENV === 'production';
 const socketGateway = new SocketGateway();
+const webhookDispatcher = new WebhookDispatcher(log);
 
 const mongoUri =
   process.env.MONGODB_URI ?? 'mongodb://127.0.0.1:27017/whatsapp_otp';
@@ -49,10 +51,15 @@ if (!process.env.JWT_SECRET) {
   log.warn('JWT_SECRET not set; using insecure dev default. Set JWT_SECRET in .env.');
 }
 
-const whatsappSessions = new WhatsAppSessionService(log, {
-  baseDataPath,
-  connectTimeoutMs: waRuntime.connectTimeoutMs,
-}, socketGateway);
+const whatsappSessions = new WhatsAppSessionService(
+  log,
+  {
+    baseDataPath,
+    connectTimeoutMs: waRuntime.connectTimeoutMs,
+  },
+  socketGateway,
+  webhookDispatcher
+);
 socketGateway.setListeningPersistenceHandlers(
   async (userId, instanceId) => getRealtimeListeningEnabled(userId, instanceId),
   async (userId, instanceId, enabled) => {
@@ -63,7 +70,7 @@ socketGateway.setSendMessageHandler((userId, instanceId, phoneNumber, text) =>
   whatsappSessions.sendOtp(userId, instanceId, phoneNumber, text)
 );
 
-const app = createApp(log, whatsappSessions);
+const app = createApp(log, whatsappSessions, webhookDispatcher);
 
 async function bootstrap() {
   await connectDatabase(mongoUri, log);

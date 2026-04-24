@@ -1,0 +1,9 @@
+{
+  "name": "whatsappconnect-webhook-test-server",
+  "private": true,
+  "type": "module",
+  "description": "Servidor local para testar POST de webhook (mensagens WhatsAppConnect)",
+  "scripts": {
+    "start": "node webhook-test-server.mjs"
+  }
+}

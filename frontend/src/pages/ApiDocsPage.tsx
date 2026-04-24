@@ -58,6 +58,44 @@ export function ApiDocsPage() {
           <p className="text-outline mt-2 text-sm">
             Fluxo recomendado: criar/listar instâncias, conectar com QR, enviar mensagens e consumir eventos em tempo real.
           </p>
+          <p className="text-outline mt-2 text-sm">
+            <strong className="text-on-surface font-semibold">Pareamento por QR (REST):</strong> integrações podem listar ou
+            criar instâncias, iniciar o pareamento e obter o QR via HTTP (Bearer com JWT ou chave <code className="font-mono text-xs">otp_…</code>) —{' '}
+            <a href="#pairing-qr" className="text-primary font-medium underline-offset-2 hover:underline">
+              ver secção dedicada
+            </a>
+            .
+          </p>
+          <nav className="border-outline-variant/15 bg-surface-container-low/50 mt-6 rounded-xl border p-4" aria-label="Índice">
+            <p className="text-on-surface mb-2 text-xs font-bold uppercase tracking-widest">Nesta página</p>
+            <ul className="list-inside list-disc space-y-1.5 text-sm text-slate-600">
+              <li>
+                <a href="#instances" className="text-primary hover:underline">
+                  Instâncias e conexão
+                </a>
+              </li>
+              <li>
+                <a href="#pairing-qr" className="text-primary font-medium hover:underline">
+                  Pareamento por QR (REST)
+                </a>
+              </li>
+              <li>
+                <a href="#send-code" className="text-primary hover:underline">
+                  Envio de mensagem
+                </a>
+              </li>
+              <li>
+                <a href="#webhook-incoming" className="text-primary hover:underline">
+                  Webhook (mensagens recebidas)
+                </a>
+              </li>
+              <li>
+                <a href="#socket" className="text-primary hover:underline">
+                  Socket.IO em tempo real
+                </a>
+              </li>
+            </ul>
+          </nav>
         </div>
 
         <Section id="instances" title="Instâncias e conexão">
@@ -71,14 +109,56 @@ Authorization: Bearer <token-ou-api-key>
 
 # Criar instância
 POST ${base}/api/v1/instances
-Authorization: Bearer <jwt>
+Authorization: Bearer <jwt-ou-api-key>
 Content-Type: application/json
 { "name": "Atendimento Comercial" }
 
-# Iniciar pareamento e consultar status
+# Endpoints WhatsApp (pareamento; detalhes na secção Pareamento por QR)
 POST ${base}/api/v1/instances/<instanceId>/whatsapp/pairing/start
 GET  ${base}/api/v1/instances/<instanceId>/whatsapp/status
 GET  ${base}/api/v1/instances/<instanceId>/whatsapp/qr`}</CodeBlock>
+        </Section>
+
+        <Section id="pairing-qr" title="Pareamento por QR (REST)">
+          <p>
+            Autenticação: <code className="font-mono text-xs">Authorization: Bearer &lt;JWT de sessão ou chave de API otp_…&gt;</code>
+            . O segmento <code className="font-mono text-xs">instanceId</code> no path pode ser o{' '}
+            <strong>ObjectId</strong> da instância <strong>ou</strong> o <strong>código</strong> (ex.{' '}
+            <code className="font-mono text-xs">inst-a1b2c3d4</code>).
+          </p>
+          <p>
+            <strong>Passos:</strong> (1) <code className="font-mono text-xs">GET /api/v1/instances</code> ou{' '}
+            <code className="font-mono text-xs">POST /api/v1/instances</code> para obter o id/código. (2){' '}
+            <code className="font-mono text-xs">POST …/whatsapp/pairing/start</code> para iniciar o pareamento. (3) Em
+            loop a cada cerca de 1–2s, chamar <code className="font-mono text-xs">GET …/whatsapp/status</code> e{' '}
+            <code className="font-mono text-xs">GET …/whatsapp/qr</code> até{' '}
+            <code className="font-mono text-xs">whatsappReady: true</code>, ou interromper após timeout. Enquanto o QR
+            ainda não existir, <code className="font-mono text-xs">qr</code> será <code className="font-mono text-xs">null</code>
+            ; o payload pode ser renovado (novo escaneamento se expirar).
+          </p>
+          <p>
+            <code className="font-mono text-xs">POST …/pairing/start</code>: responde <strong>200</strong> com{' '}
+            <code className="font-mono text-xs">alreadyConnected: true</code> se a sessão já estiver conectada, ou{' '}
+            <strong>202</strong> com <code className="font-mono text-xs">alreadyConnected: false</code> ao iniciar
+            pareamento. <code className="font-mono text-xs">GET …/qr</code> devolve{' '}
+            <code className="font-mono text-xs">&#123; &quot;qr&quot;: string | null &#125;</code> — a string é o
+            conteúdo bruto do QR; no cliente, gere a imagem com uma biblioteca de QR (não é URL nem PNG da API). Para
+            desconectar: <code className="font-mono text-xs">POST …/whatsapp/logout</code> (também com Bearer).
+          </p>
+          <CodeBlock>{`# Exemplo: iniciar e acompanhar (ajuste <instanceId> e o token)
+export API_BASE='${base}'
+export TOKEN='sua_chave_ou_jwt'
+export INST='<instanceId-ou-codigo-inst-xxx>'
+
+curl -sS -H "Authorization: Bearer $TOKEN" \\
+  -X POST "$API_BASE/api/v1/instances/$INST/whatsapp/pairing/start"
+
+# Em seguida, em loop até whatsappReady ou até obter "qr" não nulo:
+curl -sS -H "Authorization: Bearer $TOKEN" \\
+  "$API_BASE/api/v1/instances/$INST/whatsapp/status"
+curl -sS -H "Authorization: Bearer $TOKEN" \\
+  "$API_BASE/api/v1/instances/$INST/whatsapp/qr"
+`}</CodeBlock>
         </Section>
 
         <Section id="send-code" title="Envio de mensagem">
@@ -103,9 +183,54 @@ Content-Type: application/json
           </p>
         </Section>
 
+        <Section id="webhook-incoming" title="Webhook (mensagens recebidas)">
+          <p>
+            O servidor envia um <code className="font-mono text-xs">POST</code> para a sua URL quando chega uma
+            mensagem. <strong>Exclusão mútua com o Socket:</strong> ao ativar o webhook
+            ( <code className="font-mono text-xs">enabled: true</code> após o PUT), o Message Listener
+            (Socket) é desativado nessa instância. A configuração exige <strong>JWT de sessão</strong>, não chave de API.
+          </p>
+          <CodeBlock>{`# Consultar configuração
+GET ${base}/api/v1/instances/<instanceId>/whatsapp/webhook
+Authorization: Bearer <jwt-sessao>
+
+# Resposta: { "url": string | null, "enabled": boolean, "hasSecret": boolean, "secretLast4": string | null }
+
+# Definir URL, ativar e (opcional) regenerar segredo
+PUT ${base}/api/v1/instances/<instanceId>/whatsapp/webhook
+Authorization: Bearer <jwt-sessao>
+Content-Type: application/json
+
+{
+  "url": "https://seu-servidor.com/webhooks/wa",
+  "enabled": true,
+  "regenerateSecret": false
+}
+
+# Resposta 200: { "ok": true, "config": { ... }, "secret": "..." } — o campo "secret" só vem ao criar/regenerar
+
+# Enviar pedido de teste (mesmo corpo e assinatura que uma mensagem real)
+POST ${base}/api/v1/instances/<instanceId>/whatsapp/webhook/test
+Authorization: Bearer <jwt-sessao>
+`}</CodeBlock>
+          <p>
+            <strong>Entrega:</strong> <code className="font-mono text-xs">POST</code> com{' '}
+            <code className="font-mono text-xs">Content-Type: application/json</code> e o mesmo objeto que o evento
+            Socket <code className="font-mono text-xs">whatsapp.message.received</code> (campos como{' '}
+            <code className="font-mono text-xs">messageId</code>, <code className="font-mono text-xs">from</code>,{' '}
+            <code className="font-mono text-xs">text</code>, <code className="font-mono text-xs">timestamp</code>, etc.).
+            Cabeçalho <code className="font-mono text-xs">X-Webhook-Signature: sha256=&lt;hex&gt;</code> — HMAC-SHA256 do
+            corpo <strong>em UTF-8 exatamente como enviado</strong> usando o segredo da instância. Em produção a URL
+            deve ser <code className="font-mono text-xs">https://</code>; em produção, <code className="font-mono text-xs">http://</code> só se{' '}
+            <code className="font-mono text-xs">WEBHOOK_INSECURE_HTTP=1</code> estiver definido no servidor.
+          </p>
+        </Section>
+
         <Section id="socket" title="Socket.IO em tempo real">
           <p>
-            Autentique com chave de API e informe a instância no handshake:
+            O “listening” tem de estar <strong>ligado no painel</strong> (JWT). <strong>Exclusão mútua:</strong> ao
+            ativar a escuta Socket, o <strong>webhook</strong> deixa de enviar (fica <code className="font-mono text-xs">enabled: false</code> na
+            instância; URL e segredo mantêm-se). Autentique com chave de API e informe a instância no handshake:
             <code className="rounded bg-slate-100 px-1 font-mono text-xs">auth.apiKey</code> e{' '}
             <code className="rounded bg-slate-100 px-1 font-mono text-xs">auth.instanceId</code>.
           </p>

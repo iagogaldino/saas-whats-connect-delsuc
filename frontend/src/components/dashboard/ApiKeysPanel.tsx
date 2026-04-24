@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { createApiKey, listApiKeys, revokeApiKey, type ApiKeyListItem } from '../../lib/api';
 import { Icon } from './Icon';
 
@@ -85,8 +86,16 @@ export function ApiKeysPanel() {
         <p className="text-outline mb-6 text-xs leading-relaxed">
           Use no cabeçalho <code className="font-mono text-[10px]">Authorization: Bearer &lt;chave&gt;</code> como o
           token de login. A chave é global para sua conta (não presa a uma instância); na integração, informe também
-          a instância alvo por <code className="font-mono text-[10px]">instanceId</code> (ID ou código com dash).
-          A chave completa só é exibida uma vez ao criar. Gerenciar chaves exige sessão (este painel).
+          a instância alvo por <code className="font-mono text-[10px]">instanceId</code> (ID ou código com dash). Com a
+          mesma chave pode{' '}
+          <Link
+            to="/docs#pairing-qr"
+            className="text-primary font-medium underline-offset-2 hover:underline"
+          >
+            parear o WhatsApp por REST
+          </Link>{' '}
+          (listar/criar instância, polling de <code className="font-mono text-[10px]">/whatsapp/qr</code>). A chave
+          completa só é exibida uma vez ao criar. Gerenciar chaves exige sessão (este painel).
         </p>
 
         {loading && (

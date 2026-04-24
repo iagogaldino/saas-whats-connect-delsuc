@@ -7,9 +7,14 @@ import { createAuthRouter } from './routes/auth.routes';
 import { createInstancesRouter } from './routes/instances.routes';
 import { createMessagesRouter } from './routes/messages.routes';
 import { createWhatsAppRouter } from './routes/whatsapp.routes';
+import type { WebhookDispatcher } from './realtime/webhookDispatcher';
 import type { IWhatsAppSessionService } from './whatsapp';
 
-export function createApp(log: Logger, whatsappSessions: IWhatsAppSessionService) {
+export function createApp(
+  log: Logger,
+  whatsappSessions: IWhatsAppSessionService,
+  webhookDispatcher: WebhookDispatcher
+) {
   const app = express();
 
   app.use(
@@ -27,7 +32,10 @@ export function createApp(log: Logger, whatsappSessions: IWhatsAppSessionService
   });
 
   app.use('/api/v1/instances', createInstancesRouter());
-  app.use('/api/v1/instances/:instanceId/whatsapp', createWhatsAppRouter(whatsappSessions));
+  app.use(
+    '/api/v1/instances/:instanceId/whatsapp',
+    createWhatsAppRouter(whatsappSessions, webhookDispatcher)
+  );
   app.use('/api/v1/instances/:instanceId/messages', createMessagesRouter());
   app.use('/api/v1/auth', createAuthRouter(whatsappSessions));
 

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { requireJwt } from '../middleware/requireJwt';
+import { requireAuth } from '../middleware/requireAuth';
 import { createInstance, listInstancesForUser } from '../services/instance.service';
 
 const createInstanceBodySchema = z.object({
@@ -10,7 +10,7 @@ const createInstanceBodySchema = z.object({
 export function createInstancesRouter(): Router {
   const router = Router();
 
-  router.get('/', requireJwt, async (req, res, next) => {
+  router.get('/', requireAuth, async (req, res, next) => {
     try {
       const items = await listInstancesForUser(req.user!.id);
       res.json({ items });
@@ -19,7 +19,7 @@ export function createInstancesRouter(): Router {
     }
   });
 
-  router.post('/', requireJwt, async (req, res, next) => {
+  router.post('/', requireAuth, async (req, res, next) => {
     try {
       const parsed = createInstanceBodySchema.safeParse(req.body ?? {});
       if (!parsed.success) {

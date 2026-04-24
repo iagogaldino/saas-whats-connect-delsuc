@@ -28,6 +28,24 @@ export type ListeningStatusResponse = {
   connectedClients: number;
 };
 
+export type WebhookConfigResponse = {
+  url: string | null;
+  enabled: boolean;
+  hasSecret: boolean;
+  secretLast4: string | null;
+};
+
+export type PutWebhookResponse = {
+  ok: true;
+  config: WebhookConfigResponse;
+  secret?: string;
+};
+
+export type WebhookTestResponse = {
+  ok: boolean;
+  status: number;
+};
+
 export type SendCodeBody = {
   phoneNumber: string;
   message: string;
@@ -275,6 +293,66 @@ export async function stopListeningMessagesForInstance(
     throw e;
   }
   return data as ListeningStatusResponse;
+}
+
+export async function fetchWebhookConfigForInstance(
+  instanceId: string
+): Promise<WebhookConfigResponse> {
+  const res = await fetch(apiUrl(`/api/v1/instances/${encodeURIComponent(instanceId)}/whatsapp/webhook`), {
+    headers: authHeaders(),
+    cache: 'no-store',
+  });
+  redirectLoginIfUnauthorized(res);
+  const data = (await res.json().catch(() => ({}))) as WebhookConfigResponse | ApiErrorBody;
+  if (!res.ok) {
+    const err = data as ApiErrorBody;
+    const msg = err.error ?? `Erro HTTP ${res.status}`;
+    const e = new Error(msg) as Error & { status: number; details?: unknown };
+    e.status = res.status;
+    e.details = err.details;
+    throw e;
+  }
+  return data as WebhookConfigResponse;
+}
+
+export async function putWebhookConfigForInstance(
+  instanceId: string,
+  body: { url: string; enabled: boolean; regenerateSecret?: boolean }
+): Promise<PutWebhookResponse> {
+  const res = await fetch(apiUrl(`/api/v1/instances/${encodeURIComponent(instanceId)}/whatsapp/webhook`), {
+    method: 'PUT',
+    headers: authHeaders(true),
+    body: JSON.stringify(body),
+  });
+  redirectLoginIfUnauthorized(res);
+  const data = (await res.json().catch(() => ({}))) as PutWebhookResponse | ApiErrorBody;
+  if (!res.ok) {
+    const err = data as ApiErrorBody;
+    const msg = err.error ?? `Erro HTTP ${res.status}`;
+    const e = new Error(msg) as Error & { status: number; details?: unknown };
+    e.status = res.status;
+    e.details = err.details;
+    throw e;
+  }
+  return data as PutWebhookResponse;
+}
+
+export async function postWebhookTestForInstance(instanceId: string): Promise<WebhookTestResponse> {
+  const res = await fetch(apiUrl(`/api/v1/instances/${encodeURIComponent(instanceId)}/whatsapp/webhook/test`), {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+  redirectLoginIfUnauthorized(res);
+  const data = (await res.json().catch(() => ({}))) as WebhookTestResponse | ApiErrorBody;
+  if (!res.ok) {
+    const err = data as ApiErrorBody;
+    const msg = err.error ?? `Erro HTTP ${res.status}`;
+    const e = new Error(msg) as Error & { status: number; details?: unknown };
+    e.status = res.status;
+    e.details = err.details;
+    throw e;
+  }
+  return data as WebhookTestResponse;
 }
 
 export async function sendCode(

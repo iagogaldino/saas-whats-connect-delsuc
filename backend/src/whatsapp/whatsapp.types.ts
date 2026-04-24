@@ -1,20 +1,20 @@
 /**
  * Contratos HTTP estáveis (API v1) — não alterar sem atualizar frontend e ApiDocsPage.
  *
- * ## POST /api/v1/whatsapp/pairing/start
+ * ## POST /api/v1/instances/:instanceId/whatsapp/pairing/start
  * - Auth: Bearer (JWT ou API key)
  * - 200: `{ ok: true, alreadyConnected: true }` — sessão já pronta
  * - 202: `{ ok: true, alreadyConnected: false }` — pareamento iniciado em background
  *
- * ## GET /api/v1/whatsapp/status
+ * ## GET /api/v1/instances/:instanceId/whatsapp/status
  * - Auth: Bearer
  * - 200: `{ whatsappReady: boolean, pairingPending: boolean }`
  *
- * ## GET /api/v1/whatsapp/qr
+ * ## GET /api/v1/instances/:instanceId/whatsapp/qr
  * - Auth: Bearer
  * - 200: `{ qr: string | null }` — payload bruto para QR; null até o evento `qr` (Baileys)
  *
- * ## POST /api/v1/auth/send-code
+ * ## POST /api/v1/auth/instances/:instanceId/send-code
  * - Auth: Bearer
  * - Body: `{ phoneNumber, message }` (validação zod existente)
  * - 200: `{ ok: true, message: 'Código enviado' }`
