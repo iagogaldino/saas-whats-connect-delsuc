@@ -1,0 +1,21 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - '${PORT:-3001}:${PORT:-3001}'
+    env_file:
+      - .env
+    environment:
+      PORT: ${PORT:-3001}
+      NODE_ENV: production
+      WWEBJS_DATA_PATH: /app/.wwebjs_auth
+    volumes:
+      - wwebjs_auth:/app/.wwebjs_auth
+    shm_size: '1gb'
+    # MongoDB fica fora do Compose: defina MONGODB_URI no .env (Atlas, rede, ou host.docker.internal no Windows/Mac).
+
+volumes:
+  wwebjs_auth:

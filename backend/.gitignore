@@ -1,0 +1,16 @@
+node_modules/
+dist/
+
+# Segredos (JWT, MongoDB URI, etc.) — use .env.example como modelo
+.env
+.env.*
+!.env.example
+
+# Sessão WhatsApp / Puppeteer (tokens, cache do Chromium — nunca commitar)
+.wwebjs_auth/
+.wwebjs_cache/
+session-otp-service/
+
+# Logs e artefatos locais
+*.log
+.puppeteer-cache/
