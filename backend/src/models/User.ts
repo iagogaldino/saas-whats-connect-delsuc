@@ -16,6 +16,8 @@ const userSchema = new mongoose.Schema(
       enum: ['free', 'paid'],
       default: 'free',
     },
+    /** Fim do período pago (UTC). Só preenchido quando `plan` é `paid`. */
+    planExpiresAt: { type: Date, default: null, index: true },
     realtimeListeningEnabled: {
       type: Boolean,
       required: true,

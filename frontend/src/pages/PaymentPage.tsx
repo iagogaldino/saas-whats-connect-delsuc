@@ -1,21 +1,50 @@
-import { Link } from 'react-router-dom';
-import { BillingUsagePanel } from '../components/dashboard/BillingUsagePanel';
+import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { PaymentHistoryPanel } from '../components/dashboard/PaymentHistoryPanel';
 import { PaymentCheckoutForm } from '../components/dashboard/PaymentCheckoutForm';
+import { useAuth } from '../context/AuthContext';
+
+function formatPlanEndUtc(iso: string): string {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString('pt-BR', {
+      dateStyle: 'long',
+      timeStyle: 'short',
+      timeZone: 'UTC',
+    });
+  } catch {
+    return iso;
+  }
+}
+
 export function PaymentPage() {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [paymentHistoryKey, setPaymentHistoryKey] = useState(0);
+  const legacyPaymentId = searchParams.get('payment_id');
+
+  /** Limpa `?payment_id=` de URLs antigas (fluxo Checkout Pro). */
+  useEffect(() => {
+    if (!legacyPaymentId) return;
+    void navigate({ pathname: '/app/pagamento', search: '' }, { replace: true });
+  }, [legacyPaymentId, navigate]);
+
   return (
     <div className="mx-auto max-w-4xl space-y-8">
       <div className="border-b border-outline-variant/10 pb-4">
         <h1 className="text-on-surface text-2xl font-bold tracking-tight">Plano e pagamento</h1>
-        <p className="text-outline mt-1 text-sm max-w-2xl">
-          Utilização atual, formas de pagamento (cartão ou PIX) e comparação de planos. A cobrança
-          real será feita por adquirente (cartão) ou PSP (PIX) quando a integração estiver ativa; o
-          servidor pode usar checkout simulado em desenvolvimento.
-        </p>
+        {user?.plan === 'paid' && user.planExpiresAt && (
+          <p className="text-outline mt-2 text-sm" role="status">
+            O seu plano pago termina a{' '}
+            <span className="text-on-surface font-medium">
+              {formatPlanEndUtc(user.planExpiresAt)} (UTC)
+            </span>
+            .
+          </p>
+        )}
       </div>
-
-      <BillingUsagePanel />
-
-      <PaymentCheckoutForm />
 
       <div className="grid gap-6 md:grid-cols-2">
         <div className="bg-surface-container-lowest border-outline-variant/10 flex flex-col rounded-xl border p-6 shadow-sm">
@@ -61,6 +90,12 @@ export function PaymentPage() {
         </div>
       </div>
 
+      <PaymentCheckoutForm
+        onPlanActivated={() => setPaymentHistoryKey((k) => k + 1)}
+      />
+
+      <PaymentHistoryPanel key={paymentHistoryKey} />
+
       <p className="text-outline text-center text-xs">
         Dúvidas?{' '}
         <a
@@ -72,9 +107,6 @@ export function PaymentPage() {
           Fale conosco no WhatsApp
         </a>
         .{' '}
-        <Link to="/" className="text-primary font-medium hover:underline">
-          Voltar à página inicial
-        </Link>
       </p>
     </div>
   );

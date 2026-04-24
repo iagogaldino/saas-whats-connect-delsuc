@@ -16,8 +16,12 @@ import {
   loadWhatsappRuntimeConfig,
   resolveBaseDataPathAbsolute,
 } from './whatsapp';
+import { startPlanExpirationSweep } from './jobs/planExpirationSweep.schedule';
+import { drainPremiumActivationBacklog } from './services/premiumActivationQueue.service';
 
 const log = createLogger();
+
+let stopPlanExpirationSweep: () => void = () => {};
 
 const port = Number(process.env.PORT) || 3001;
 const backendRoot = path.resolve(__dirname, '..');
@@ -74,6 +78,10 @@ const app = createApp(log, whatsappSessions, webhookDispatcher);
 
 async function bootstrap() {
   await connectDatabase(mongoUri, log);
+  await drainPremiumActivationBacklog(log);
+
+  const planSweep = startPlanExpirationSweep(log);
+  stopPlanExpirationSweep = planSweep.stop;
 
   const server = createServer(app);
   socketGateway.attach(server, log);
@@ -84,6 +92,7 @@ async function bootstrap() {
 
   function shutdown(signal: string) {
     log.info({ signal }, 'Encerrando');
+    stopPlanExpirationSweep();
     server.close(() => {
       process.exit(0);
     });

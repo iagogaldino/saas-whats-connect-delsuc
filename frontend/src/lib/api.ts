@@ -103,11 +103,30 @@ export type BillingSummary = {
   usedToday: number;
   remaining: number | null;
   dayTimezoneNote: 'UTC';
+  planExpiresAt: string | null;
 };
 
 export type MockCheckoutResponse = BillingSummary & {
   ok: true;
   message: string;
+};
+
+export type PlanPaymentItem = {
+  id: string;
+  source: 'mercadopago' | 'mock';
+  status: 'approved';
+  amount: number;
+  currency: string;
+  approvedAt: string;
+  planExpiresAt: string;
+  createdAt: string;
+};
+
+export type PlanPaymentsResponse = {
+  items: PlanPaymentItem[];
+  total: number;
+  page: number;
+  limit: number;
 };
 
 export type ApiRequestLogItem = {
@@ -157,6 +176,31 @@ export async function fetchBillingSummary(): Promise<BillingSummary> {
   return data as BillingSummary;
 }
 
+export async function fetchPlanPayments(
+  page = 1,
+  limit = 20
+): Promise<PlanPaymentsResponse> {
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+  });
+  const res = await fetch(apiUrl(`/api/v1/auth/billing/payments?${params.toString()}`), {
+    headers: authHeaders(),
+    cache: 'no-store',
+  });
+  redirectLoginIfUnauthorized(res);
+  const data = (await res.json().catch(() => ({}))) as PlanPaymentsResponse | ApiErrorBody;
+  if (!res.ok) {
+    const err = data as ApiErrorBody;
+    const msg = err.error ?? `Erro HTTP ${res.status}`;
+    const e = new Error(msg) as Error & { status: number; details?: unknown };
+    e.status = res.status;
+    e.details = err.details;
+    throw e;
+  }
+  return data as PlanPaymentsResponse;
+}
+
 export async function postMockCheckout(): Promise<MockCheckoutResponse> {
   const res = await fetch(apiUrl('/api/v1/auth/billing/mock-checkout'), {
     method: 'POST',
@@ -173,6 +217,111 @@ export async function postMockCheckout(): Promise<MockCheckoutResponse> {
     throw e;
   }
   return data as MockCheckoutResponse;
+}
+
+export type MercadopagoCardPaymentPayload = {
+  token: string;
+  payment_method_id: string;
+  issuer_id?: string;
+  transaction_amount: number;
+  installments: number;
+  payer: {
+    email?: string;
+    identification?: { type: string; number: string };
+  };
+};
+
+export type MercadopagoCardPaymentResponse = MockCheckoutResponse & {
+  activated: true;
+  paymentId: string;
+  status: string;
+};
+
+export async function postMercadopagoCardPayment(
+  body: MercadopagoCardPaymentPayload
+): Promise<MercadopagoCardPaymentResponse> {
+  const res = await fetch(apiUrl('/api/v1/auth/billing/mercadopago/card-payment'), {
+    method: 'POST',
+    headers: authHeaders(true),
+    body: JSON.stringify(body),
+  });
+  redirectLoginIfUnauthorized(res);
+  const data = (await res.json().catch(() => ({}))) as MercadopagoCardPaymentResponse | ApiErrorBody;
+  if (!res.ok) {
+    const err = data as ApiErrorBody;
+    const msg = err.error ?? `Erro HTTP ${res.status}`;
+    const e = new Error(msg) as Error & { status: number; details?: unknown };
+    e.status = res.status;
+    e.details = err.details;
+    throw e;
+  }
+  return data as MercadopagoCardPaymentResponse;
+}
+
+export type MercadopagoPixCreatePayload = {
+  payer?: { identification?: { type: string; number: string } };
+};
+
+export type MercadopagoPixCreateResponse = BillingSummary & {
+  ok: true;
+  paymentId: string;
+  status: string;
+} & (
+  | { phase: 'activated'; planActivated: true; activated?: boolean }
+  | {
+      phase: 'pending';
+      planActivated: false;
+      qrCode: string;
+      qrCodeBase64: string | null;
+      ticketUrl: string | null;
+      dateOfExpiration: string | null;
+    }
+);
+
+export async function postMercadopagoPix(
+  body: MercadopagoPixCreatePayload = {}
+): Promise<MercadopagoPixCreateResponse> {
+  const res = await fetch(apiUrl('/api/v1/auth/billing/mercadopago/pix-payment'), {
+    method: 'POST',
+    headers: authHeaders(true),
+    body: JSON.stringify(body),
+  });
+  redirectLoginIfUnauthorized(res);
+  const data = (await res.json().catch(() => ({}))) as MercadopagoPixCreateResponse | ApiErrorBody;
+  if (!res.ok) {
+    const err = data as ApiErrorBody;
+    const msg = err.error ?? `Erro HTTP ${res.status}`;
+    const e = new Error(msg) as Error & { status: number; details?: unknown };
+    e.status = res.status;
+    e.details = err.details;
+    throw e;
+  }
+  return data as MercadopagoPixCreateResponse;
+}
+
+export type MercadopagoSyncPaymentResponse =
+  | (BillingSummary & { ok: true; activated: true; status: string })
+  | { ok: true; activated: false; status: string; reason?: string };
+
+export async function postMercadopagoSyncPayment(
+  paymentId: string
+): Promise<MercadopagoSyncPaymentResponse> {
+  const res = await fetch(apiUrl('/api/v1/auth/billing/mercadopago/sync-payment'), {
+    method: 'POST',
+    headers: authHeaders(true),
+    body: JSON.stringify({ paymentId }),
+  });
+  redirectLoginIfUnauthorized(res);
+  const data = (await res.json().catch(() => ({}))) as MercadopagoSyncPaymentResponse | ApiErrorBody;
+  if (!res.ok) {
+    const err = data as ApiErrorBody;
+    const msg = err.error ?? `Erro HTTP ${res.status}`;
+    const e = new Error(msg) as Error & { status: number; details?: unknown };
+    e.status = res.status;
+    e.details = err.details;
+    throw e;
+  }
+  return data as MercadopagoSyncPaymentResponse;
 }
 
 function redirectLoginIfUnauthorized(res: Response): void {

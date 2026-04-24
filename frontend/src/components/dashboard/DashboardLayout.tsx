@@ -110,7 +110,16 @@ export function DashboardLayout() {
             </NavLink>
           </nav>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          {user && (
+            <span
+              className={`text-[10px] font-bold uppercase tracking-wider md:hidden ${
+                user.plan === 'paid' ? 'text-slate-800' : 'text-slate-600'
+              }`}
+            >
+              {user.plan === 'paid' ? 'Premium' : 'Limitado'}
+            </span>
+          )}
           {user && (
             <span className="text-outline hidden max-w-[200px] truncate text-xs sm:inline" title={user.email}>
               {user.email}
@@ -129,7 +138,15 @@ export function DashboardLayout() {
             <p className="mt-1 truncate text-[10px] text-slate-600" title={user?.email}>
               {user?.email ?? '—'}
             </p>
-            <p className="mt-0.5 text-[10px] uppercase tracking-widest text-slate-500">API v1</p>
+            {user && (
+              <p
+                className={`mt-1.5 text-[10px] font-bold uppercase tracking-[0.2em] ${
+                  user.plan === 'paid' ? 'text-slate-800' : 'text-slate-600'
+                }`}
+              >
+                {user.plan === 'paid' ? 'Premium' : 'Limitado'}
+              </p>
+            )}
           </div>
         </div>
         <nav className="mt-4 flex-1">

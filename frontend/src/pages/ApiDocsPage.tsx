@@ -189,9 +189,9 @@ Content-Type: application/json
             <code className="font-mono">FREE_DAILY_SEND_LIMIT</code>). 503: sessão não conectada.
           </p>
           <p className="text-outline mt-2 text-xs">
-            Para testar upgrade sem gateway, o servidor pode expor{' '}
-            <code className="font-mono">POST /api/v1/auth/billing/mock-checkout</code> com{' '}
-            <code className="font-mono">ENABLE_MOCK_BILLING=1</code> (não usar em produção real).
+            Para testar upgrade sem gateway, o endpoint{' '}
+            <code className="font-mono">POST /api/v1/auth/billing/mock-checkout</code> (sessão JWT) promove
+            o plano a pago; em produção use o fluxo de pagamento real.
           </p>
         </Section>
 

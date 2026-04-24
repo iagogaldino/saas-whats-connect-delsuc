@@ -10,7 +10,12 @@ import {
 import { apiUrl } from '../lib/config';
 import { clearToken, getToken, setToken as persistToken } from '../lib/authStorage';
 
-export type AuthUser = { id: string; email: string; plan: 'free' | 'paid' };
+export type AuthUser = {
+  id: string;
+  email: string;
+  plan: 'free' | 'paid';
+  planExpiresAt?: string | null;
+};
 
 type AuthContextValue = {
   token: string | null;
