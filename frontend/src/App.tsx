@@ -8,8 +8,10 @@ import { HistoryPage } from './pages/HistoryPage';
 import { InstanceDashboardPage } from './pages/InstanceDashboardPage';
 import { InstancesPage } from './pages/InstancesPage';
 import { LandingPage } from './pages/LandingPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { PaymentPage } from './pages/PaymentPage';
 import { TokensPage } from './pages/TokensPage';
 
@@ -22,6 +24,8 @@ export default function App() {
           <Route path="/docs" element={<ApiDocsPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route
             path="/app"
             element={

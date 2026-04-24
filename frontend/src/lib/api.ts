@@ -718,3 +718,53 @@ export async function createInstance(name?: string): Promise<WhatsAppInstance> {
   }
   return data as WhatsAppInstance;
 }
+
+export type ForgotPasswordResponse = {
+  ok: true;
+  message: string;
+};
+
+export async function requestPasswordReset(email: string): Promise<ForgotPasswordResponse> {
+  const res = await fetch(apiUrl('/api/v1/auth/forgot-password'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email.trim() }),
+  });
+  const data = (await res.json().catch(() => ({}))) as ForgotPasswordResponse | ApiErrorBody;
+  if (!res.ok) {
+    const err = data as ApiErrorBody;
+    const e = new Error(err.error ?? `Erro HTTP ${res.status}`) as Error & {
+      status: number;
+      details?: unknown;
+    };
+    e.status = res.status;
+    e.details = err.details;
+    throw e;
+  }
+  return data as ForgotPasswordResponse;
+}
+
+export type ResetPasswordResponse = { ok: true; message: string };
+
+export async function resetPasswordWithToken(
+  token: string,
+  password: string
+): Promise<ResetPasswordResponse> {
+  const res = await fetch(apiUrl('/api/v1/auth/reset-password'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, password }),
+  });
+  const data = (await res.json().catch(() => ({}))) as ResetPasswordResponse | ApiErrorBody;
+  if (!res.ok) {
+    const err = data as ApiErrorBody;
+    const e = new Error(err.error ?? `Erro HTTP ${res.status}`) as Error & {
+      status: number;
+      details?: unknown;
+    };
+    e.status = res.status;
+    e.details = err.details;
+    throw e;
+  }
+  return data as ResetPasswordResponse;
+}

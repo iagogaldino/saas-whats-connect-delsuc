@@ -16,6 +16,12 @@ export function LoginPage() {
     if (!r) return '/register';
     return `/register?redirect=${encodeURIComponent(r)}`;
   }, [searchParams]);
+  const forgotHref = useMemo(() => {
+    const r = searchParams.get('redirect');
+    if (!r) return '/forgot-password';
+    return `/forgot-password?redirect=${encodeURIComponent(r)}`;
+  }, [searchParams]);
+  const passwordResetSuccess = searchParams.get('passwordReset') === 'ok';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -67,9 +73,14 @@ export function LoginPage() {
             />
           </div>
           <div>
-            <label className="text-outline mb-1 block text-xs font-bold uppercase tracking-wider">
-              Senha
-            </label>
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <label className="text-outline block text-xs font-bold uppercase tracking-wider">
+                Senha
+              </label>
+              <Link to={forgotHref} className="text-primary text-xs font-semibold hover:underline">
+                Esqueceu a senha?
+              </Link>
+            </div>
             <input
               type="password"
               autoComplete="current-password"
@@ -80,6 +91,15 @@ export function LoginPage() {
               className="border-outline-variant/30 focus:ring-primary/30 text-on-surface w-full rounded-lg border bg-slate-50 px-3 py-2.5 text-sm focus:ring-2 focus:outline-none"
             />
           </div>
+
+          {passwordResetSuccess && (
+            <p
+              className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900"
+              role="status"
+            >
+              Senha redefinida com sucesso. Já pode entrar.
+            </p>
+          )}
 
           {error && (
             <p className="text-error bg-error/10 rounded-lg px-3 py-2 text-sm" role="alert">

@@ -18,6 +18,9 @@ const userSchema = new mongoose.Schema(
     },
     /** Fim do período pago (UTC). Só preenchido quando `plan` é `paid`. */
     planExpiresAt: { type: Date, default: null, index: true },
+    /** Hash SHA-256 (hex) do token opaco; só existe durante um pedido de recuperação. */
+    passwordResetTokenHash: { type: String, default: null, select: false },
+    passwordResetExpiresAt: { type: Date, default: null, select: false, index: true },
     realtimeListeningEnabled: {
       type: Boolean,
       required: true,

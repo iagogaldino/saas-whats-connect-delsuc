@@ -18,12 +18,14 @@ import {
   isMercadoPagoConfigured,
   syncUserMercadoPagoPayment,
 } from '../services/mercadopago.service';
+import { requestPasswordReset, resetPasswordWithToken } from '../services/passwordReset.service';
 import { loginUser, registerUser, toPublicUser } from '../services/userAuth.service';
 import { User } from '../models/User';
 import type { IWhatsAppSessionService } from '../whatsapp';
 import { formatSendError, recordSend } from '../services/sentMessage.service';
 import { createApiKeyBodySchema } from '../validation/apiKey.schema';
 import { credentialsBodySchema } from '../validation/credentials.schema';
+import { forgotPasswordBodySchema, resetPasswordBodySchema } from '../validation/passwordReset.schema';
 import { sendCodeBodySchema } from '../validation/sendCode.schema';
 import { z } from 'zod';
 import { mercadopagoCardPaymentRequestSchema } from '../validation/mercadopagoCardPayment.schema';
@@ -63,6 +65,37 @@ export function createAuthRouter(whatsappSessions: IWhatsAppSessionService): Rou
       const { email, password } = parsed.data;
       const { user, token } = await loginUser(email, password);
       res.status(200).json({ user, token });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.post('/forgot-password', async (req, res, next) => {
+    try {
+      const parsed = forgotPasswordBodySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return next(parsed.error);
+      }
+      await requestPasswordReset(parsed.data.email);
+      res.status(200).json({
+        ok: true,
+        message:
+          'Se existir uma conta com este e-mail, receberá instruções para redefinir a senha.',
+      });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.post('/reset-password', async (req, res, next) => {
+    try {
+      const parsed = resetPasswordBodySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return next(parsed.error);
+      }
+      const { token, password } = parsed.data;
+      await resetPasswordWithToken(token, password);
+      res.status(200).json({ ok: true, message: 'Senha redefinida. Já pode entrar.' });
     } catch (e) {
       next(e);
     }
