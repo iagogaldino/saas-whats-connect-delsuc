@@ -10,7 +10,7 @@ import {
 import { apiUrl } from '../lib/config';
 import { clearToken, getToken, setToken as persistToken } from '../lib/authStorage';
 
-export type AuthUser = { id: string; email: string };
+export type AuthUser = { id: string; email: string; plan: 'free' | 'paid' };
 
 type AuthContextValue = {
   token: string | null;
@@ -19,6 +19,8 @@ type AuthContextValue = {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  /** Recarrega o utilizador a partir de GET /auth/me (após subscrição, etc.). */
+  refreshUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -71,6 +73,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     else clearToken();
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    const t = getToken();
+    if (!t) {
+      setUser(null);
+      return;
+    }
+    const r = await fetch(apiUrl('/api/v1/auth/me'), {
+      headers: { Authorization: `Bearer ${t}` },
+    });
+    if (!r.ok) {
+      if (r.status === 401) {
+        clearToken();
+        setTokenState(null);
+        setUser(null);
+      }
+      return;
+    }
+    const d = (await r.json()) as { user: AuthUser };
+    setUser(d.user);
+  }, []);
+
   const login = useCallback(
     async (email: string, password: string) => {
       const res = await fetch(apiUrl('/api/v1/auth/login'), {
@@ -120,8 +143,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       register,
       logout,
+      refreshUser,
     }),
-    [token, user, bootstrapping, login, register, logout]
+    [token, user, bootstrapping, login, register, logout, refreshUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

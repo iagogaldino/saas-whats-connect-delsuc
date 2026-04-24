@@ -10,7 +10,13 @@ import {
   revokeApiKey,
 } from '../services/apiKey.service';
 import { listApiRequestLogsForUser } from '../services/apiRequestLog.service';
-import { loginUser, registerUser } from '../services/userAuth.service';
+import {
+  getBillingSummary,
+  isMockBillingEnabled,
+  setUserPlanPaid,
+} from '../services/billing.service';
+import { loginUser, registerUser, toPublicUser } from '../services/userAuth.service';
+import { User } from '../models/User';
 import type { IWhatsAppSessionService } from '../whatsapp';
 import { formatSendError, recordSend } from '../services/sentMessage.service';
 import { createApiKeyBodySchema } from '../validation/apiKey.schema';
@@ -54,9 +60,48 @@ export function createAuthRouter(whatsappSessions: IWhatsAppSessionService): Rou
     }
   });
 
-  router.get('/me', requireAuth, (req, res) => {
-    const u = req.user!;
-    res.json({ user: { id: u.id, email: u.email } });
+  router.get('/me', requireAuth, async (req, res, next) => {
+    try {
+      const u = req.user!;
+      const doc = await User.findById(u.id).lean();
+      if (!doc) {
+        return next(new AppError('Utilizador não encontrado', 404));
+      }
+      res.json({ user: toPublicUser(doc) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.get('/billing', requireJwt, async (req, res, next) => {
+    try {
+      const summary = await getBillingSummary(req.user!.id);
+      res.json(summary);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.post('/billing/mock-checkout', requireJwt, async (req, res, next) => {
+    try {
+      if (!isMockBillingEnabled()) {
+        return next(
+          new AppError(
+            'Checkout simulado desativado (defina ENABLE_MOCK_BILLING=1 apenas em ambiente de desenvolvimento).',
+            403
+          )
+        );
+      }
+      const userId = req.user!.id;
+      const ok = await setUserPlanPaid(userId);
+      if (!ok) {
+        return next(new AppError('Utilizador não encontrado', 404));
+      }
+      const summary = await getBillingSummary(userId);
+      res.json({ ok: true, message: 'Plano atualizado para pago (simulação).', ...summary });
+    } catch (e) {
+      next(e);
+    }
   });
 
   router.post('/api-keys', requireJwt, async (req, res, next) => {
@@ -125,9 +170,6 @@ export function createAuthRouter(whatsappSessions: IWhatsAppSessionService): Rou
 
       try {
         await whatsappSessions.sendOtp(userId, instanceId, phoneNumber, message);
-        await recordSend(userId, instanceId, phoneNumber, 'success', undefined, message).catch(() => {
-          /* não falha a resposta HTTP se o log em DB falhar */
-        });
         res.status(200).json({ ok: true, message: 'Código enviado' });
       } catch (sendErr) {
         await recordSend(userId, instanceId, phoneNumber, 'failed', formatSendError(sendErr), message).catch(() => {

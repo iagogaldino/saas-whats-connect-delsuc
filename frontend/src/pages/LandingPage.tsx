@@ -1,44 +1,3 @@
-const featureCols = [
-  {
-    title: 'Backend Infrastructure',
-    icon: 'storage',
-    border: 'border-primary',
-    points: [
-      {
-        t: 'Session Management',
-        d: 'Persistência de estado de conexão e múltiplas instâncias simultâneas.',
-      },
-      {
-        t: 'QR Pairing em Tempo Real',
-        d: 'Geração de QR dinâmico para conectar e reconectar sessões com rapidez.',
-      },
-      {
-        t: 'Envio de Mensagens Livres',
-        d: 'Envie qualquer texto via API, sem limitação ao fluxo de OTP.',
-      },
-    ],
-  },
-  {
-    title: 'Frontend & Control',
-    icon: 'dashboard',
-    border: 'border-tertiary-fixed',
-    points: [
-      {
-        t: 'Monitoring Dashboard',
-        d: 'Visão completa da saúde das instâncias e volume de tráfego.',
-      },
-      {
-        t: 'Controles em Tempo Real',
-        d: 'Ligue ou desligue instâncias e controle o canal de escuta em segundos.',
-      },
-      {
-        t: 'Advanced Logs',
-        d: 'Rastreabilidade total para auditoria e debugging técnico.',
-      },
-    ],
-  },
-];
-
 const steps = [
   ['01', 'Login Seguro', 'Acesse o painel administrativo usando suas credenciais criptografadas.'],
   ['02', 'QR Pairing', 'Escaneie o código dinâmico para conectar sua instância do WhatsApp.'],
@@ -55,11 +14,11 @@ export function LandingPage() {
             ConnectAPI
           </a>
           <div className="hidden items-center gap-8 md:flex">
-            <a className="font-headline text-sm font-semibold text-on-surface-variant hover:text-primary" href="#features">
-              Features
-            </a>
             <a className="font-headline text-sm font-semibold text-on-surface-variant hover:text-primary" href="#how-it-works">
               How it Works
+            </a>
+            <a className="font-headline text-sm font-semibold text-on-surface-variant hover:text-primary" href="#pricing">
+              Planos
             </a>
             <a className="font-headline text-sm font-semibold text-on-surface-variant hover:text-primary" href="#api">
               API
@@ -129,41 +88,6 @@ POST /api/v1/auth/instances/<instanceId>/send-code
         </div>
       </header>
 
-      <section id="features" className="bg-surface-container-low py-24">
-        <div className="mx-auto max-w-7xl px-6">
-          <div className="mb-16 text-center">
-            <h2 className="font-headline mb-4 text-4xl font-extrabold">Arquitetura de Duas Camadas</h2>
-            <p className="mx-auto max-w-2xl text-on-surface-variant">
-              Construído para operação contínua, controle por instância e integração simples para qualquer tipo de
-              mensagem.
-            </p>
-          </div>
-          <div className="grid gap-8 md:grid-cols-2">
-            {featureCols.map((col) => (
-              <div key={col.title} className={`rounded-xl border-l-4 bg-surface-container-lowest p-10 shadow-sm ${col.border}`}>
-                <div className="mb-6 flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-on-primary">
-                    <span className="material-symbols-outlined">{col.icon}</span>
-                  </div>
-                  <h3 className="font-headline text-2xl font-bold">{col.title}</h3>
-                </div>
-                <ul className="space-y-6">
-                  {col.points.map((item) => (
-                    <li key={item.t} className="flex gap-4">
-                      <span className="material-symbols-outlined mt-1 text-tertiary-container">check_circle</span>
-                      <div>
-                        <p className="font-bold">{item.t}</p>
-                        <p className="text-sm text-on-surface-variant">{item.d}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       <section id="how-it-works" className="py-24">
         <div className="mx-auto max-w-7xl px-6">
           <div className="mb-16">
@@ -185,6 +109,75 @@ POST /api/v1/auth/instances/<instanceId>/send-code
                 )}
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="pricing" className="bg-surface-container-highest/50 py-24">
+        <div className="mx-auto max-w-7xl px-6">
+          <div className="mb-16 text-center">
+            <h2 className="font-headline mb-4 text-4xl font-extrabold">Planos</h2>
+            <p className="mx-auto max-w-2xl text-on-surface-variant">
+              Comece no plano gratuito ou desbloqueie o envio completo com assinatura mensal.
+            </p>
+          </div>
+          <div className="mx-auto grid max-w-4xl gap-8 md:grid-cols-2">
+            <div className="flex flex-col rounded-2xl border-2 border-outline-variant/30 bg-surface-container-lowest p-8 shadow-sm">
+              <div className="mb-2 text-sm font-bold uppercase tracking-widest text-on-surface-variant">Grátis</div>
+              <div className="font-headline mb-6 text-4xl font-extrabold">
+                R$ 0
+                <span className="text-lg font-semibold text-on-surface-variant"> /mês</span>
+              </div>
+              <ul className="mb-8 flex-1 space-y-4 text-sm text-on-surface-variant">
+                <li className="flex items-start gap-2">
+                  <span className="material-symbols-outlined mt-0.5 shrink-0 text-tertiary text-[20px]">check_circle</span>
+                  <span>Até <strong className="text-on-surface">20 mensagens enviadas por dia</strong> (API / envio)</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="material-symbols-outlined mt-0.5 shrink-0 text-tertiary text-[20px]">check_circle</span>
+                  <span>Instâncias, QR e receção conforme a plataforma</span>
+                </li>
+              </ul>
+              <a
+                href="/register"
+                className="block w-full rounded-xl border-2 border-primary bg-transparent py-3.5 text-center font-bold text-primary transition-colors hover:bg-primary/5"
+              >
+                Criar conta grátis
+              </a>
+            </div>
+            <div className="relative flex flex-col overflow-hidden rounded-2xl border-2 border-primary bg-surface-container-lowest p-8 shadow-md ring-1 ring-primary/20">
+              <div className="absolute right-4 top-4 rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-bold uppercase text-on-primary">
+                Popular
+              </div>
+              <div className="mb-2 text-sm font-bold uppercase tracking-widest text-primary">Pago</div>
+              <div className="font-headline mb-6 text-4xl font-extrabold text-primary">
+                R$ 20
+                <span className="text-lg font-semibold text-on-surface-variant"> /mês</span>
+              </div>
+              <p className="mb-4 text-sm text-on-surface-variant">Assinatura mensal. Envio e limites além do plano gratuito.</p>
+              <ul className="mb-8 flex-1 space-y-4 text-sm text-on-surface-variant">
+                <li className="flex items-start gap-2">
+                  <span className="material-symbols-outlined mt-0.5 shrink-0 text-primary text-[20px]">all_inclusive</span>
+                  <span>
+                    <strong className="text-on-surface">Assinatura mensal</strong> — cobrança recorrente de R$ 20
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="material-symbols-outlined mt-0.5 shrink-0 text-primary text-[20px]">send</span>
+                  <span>Sem o limite diário de 20 mensagens do plano grátis</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="material-symbols-outlined mt-0.5 shrink-0 text-primary text-[20px]">support_agent</span>
+                  <span>Prioridade e funcionalidades completas (conforme o produto)</span>
+                </li>
+              </ul>
+              <a
+                href="/app/pagamento"
+                className="block w-full rounded-xl bg-primary py-3.5 text-center font-bold text-on-primary transition-opacity hover:opacity-90"
+              >
+                Assinar — R$ 20/mês
+              </a>
+            </div>
           </div>
         </div>
       </section>
@@ -307,6 +300,7 @@ POST /api/v1/auth/instances/<instanceId>/send-code
             <div>
               <h5 className="mb-4 font-bold text-primary">Platform</h5>
               <ul className="space-y-2 text-sm text-slate-500">
+                <li><a href="#pricing">Planos</a></li>
                 <li><a href="/docs">Documentation</a></li>
                 <li><a href="/app">API Status</a></li>
                 <li><a href="/app/logs">Release Notes</a></li>

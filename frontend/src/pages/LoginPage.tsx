@@ -1,10 +1,21 @@
-import { type FormEvent, useState } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { type FormEvent, useMemo, useState } from 'react';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { getSafeRedirectPath } from '../lib/redirect';
 
 export function LoginPage() {
   const { login, token, bootstrapping } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const afterAuthPath = useMemo(
+    () => getSafeRedirectPath(searchParams.get('redirect')),
+    [searchParams]
+  );
+  const registerHref = useMemo(() => {
+    const r = searchParams.get('redirect');
+    if (!r) return '/register';
+    return `/register?redirect=${encodeURIComponent(r)}`;
+  }, [searchParams]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -16,7 +27,7 @@ export function LoginPage() {
     setLoading(true);
     try {
       await login(email.trim(), password);
-      navigate('/app', { replace: true });
+      navigate(afterAuthPath, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao entrar');
     } finally {
@@ -32,7 +43,7 @@ export function LoginPage() {
     );
   }
   if (token) {
-    return <Navigate to="/app" replace />;
+    return <Navigate to={afterAuthPath} replace />;
   }
 
   return (
@@ -87,7 +98,7 @@ export function LoginPage() {
 
         <p className="text-outline mt-6 text-center text-sm">
           Não tem conta?{' '}
-          <Link to="/register" className="text-primary font-semibold hover:underline">
+          <Link to={registerHref} className="text-primary font-semibold hover:underline">
             Cadastre-se
           </Link>
         </p>

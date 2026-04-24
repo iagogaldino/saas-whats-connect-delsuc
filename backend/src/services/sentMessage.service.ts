@@ -87,3 +87,23 @@ export async function listForUser(
 
   return { items, total, page, limit };
 }
+
+/** Início e fim do dia civil em UTC (para limite do plano grátis). */
+export function utcDayBounds(date = new Date()): { start: Date; end: Date } {
+  const y = date.getUTCFullYear();
+  const m = date.getUTCMonth();
+  const d = date.getUTCDate();
+  const start = new Date(Date.UTC(y, m, d, 0, 0, 0, 0));
+  const end = new Date(Date.UTC(y, m, d + 1, 0, 0, 0, 0));
+  return { start, end };
+}
+
+/** Contagem de envios com sucesso hoje (UTC) para o utilizador (todas as instâncias). */
+export async function countSuccessfulSendsToday(userId: string): Promise<number> {
+  const { start, end } = utcDayBounds();
+  return SentMessage.countDocuments({
+    userId: new mongoose.Types.ObjectId(userId),
+    status: 'success',
+    createdAt: { $gte: start, $lt: end },
+  });
+}

@@ -10,6 +10,7 @@ import { InstancesPage } from './pages/InstancesPage';
 import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
+import { PaymentPage } from './pages/PaymentPage';
 import { TokensPage } from './pages/TokensPage';
 
 export default function App() {
@@ -31,6 +32,7 @@ export default function App() {
           >
             <Route index element={<InstancesPage />} />
             <Route path="tokens" element={<TokensPage />} />
+            <Route path="pagamento" element={<PaymentPage />} />
           </Route>
           <Route
             path="/instances/:instanceId"

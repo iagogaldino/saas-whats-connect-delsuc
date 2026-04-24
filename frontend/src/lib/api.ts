@@ -97,6 +97,19 @@ export type CreateApiKeyResponse = {
   createdAt: string;
 };
 
+export type BillingSummary = {
+  plan: 'free' | 'paid';
+  freeDailyLimit: number;
+  usedToday: number;
+  remaining: number | null;
+  dayTimezoneNote: 'UTC';
+};
+
+export type MockCheckoutResponse = BillingSummary & {
+  ok: true;
+  message: string;
+};
+
 export type ApiRequestLogItem = {
   id: string;
   instanceId: string | null;
@@ -124,6 +137,42 @@ function authHeaders(json = false): Record<string, string> {
   const t = getToken();
   if (t) h['Authorization'] = `Bearer ${t}`;
   return h;
+}
+
+export async function fetchBillingSummary(): Promise<BillingSummary> {
+  const res = await fetch(apiUrl('/api/v1/auth/billing'), {
+    headers: authHeaders(),
+    cache: 'no-store',
+  });
+  redirectLoginIfUnauthorized(res);
+  const data = (await res.json().catch(() => ({}))) as BillingSummary | ApiErrorBody;
+  if (!res.ok) {
+    const err = data as ApiErrorBody;
+    const msg = err.error ?? `Erro HTTP ${res.status}`;
+    const e = new Error(msg) as Error & { status: number; details?: unknown };
+    e.status = res.status;
+    e.details = err.details;
+    throw e;
+  }
+  return data as BillingSummary;
+}
+
+export async function postMockCheckout(): Promise<MockCheckoutResponse> {
+  const res = await fetch(apiUrl('/api/v1/auth/billing/mock-checkout'), {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+  redirectLoginIfUnauthorized(res);
+  const data = (await res.json().catch(() => ({}))) as MockCheckoutResponse | ApiErrorBody;
+  if (!res.ok) {
+    const err = data as ApiErrorBody;
+    const msg = err.error ?? `Erro HTTP ${res.status}`;
+    const e = new Error(msg) as Error & { status: number; details?: unknown };
+    e.status = res.status;
+    e.details = err.details;
+    throw e;
+  }
+  return data as MockCheckoutResponse;
 }
 
 function redirectLoginIfUnauthorized(res: Response): void {

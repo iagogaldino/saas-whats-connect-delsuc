@@ -56,6 +56,7 @@ export interface IWhatsAppSessionService {
   getQr(userId: string, instanceId: string): string | null;
   isReady(userId: string, instanceId: string): boolean;
   isPairingPending(userId: string, instanceId: string): boolean;
+  /** Cota (plano grátis) e registo de sucesso em histórico aplicam-se aqui. */
   sendOtp(userId: string, instanceId: string, phoneNumber: string, code: string): Promise<void>;
   destroySession(userId: string, instanceId: string): Promise<void>;
   getListeningStatus(userId: string, instanceId: string): Promise<WhatsAppListeningStatusBody>;

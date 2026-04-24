@@ -10,6 +10,12 @@ const userSchema = new mongoose.Schema(
       trim: true,
     },
     passwordHash: { type: String, required: true },
+    plan: {
+      type: String,
+      required: true,
+      enum: ['free', 'paid'],
+      default: 'free',
+    },
     realtimeListeningEnabled: {
       type: Boolean,
       required: true,

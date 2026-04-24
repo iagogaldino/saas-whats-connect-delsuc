@@ -24,6 +24,7 @@ export function DashboardLayout() {
   const historyPath = inInstance ? `/instances/${instanceId}/history` : '/app/history';
   const logsPath = inInstance ? `/instances/${instanceId}/logs` : '/app/logs';
   const tokensPath = '/app/tokens';
+  const paymentPath = '/app/pagamento';
 
   function goHomeAndScroll(id: string) {
     if (location.pathname === overviewPath) {
@@ -62,6 +63,16 @@ export function DashboardLayout() {
               }
             >
               Tokens
+            </NavLink>
+            <NavLink
+              to={paymentPath}
+              className={({ isActive }) =>
+                isActive
+                  ? 'border-b-2 border-slate-700 pb-1 font-sans text-sm font-bold tracking-tight text-slate-900'
+                  : 'font-sans text-sm tracking-tight text-slate-600 hover:text-slate-900'
+              }
+            >
+              Plano
             </NavLink>
             {inInstance && (
               <NavLink
@@ -138,6 +149,15 @@ export function DashboardLayout() {
                 <span className="font-sans text-xs font-medium uppercase tracking-widest">Tokens</span>
               </NavLink>
             </li>
+            <li>
+              <NavLink
+                to={paymentPath}
+                className={({ isActive }) => (isActive ? navItemActive : navItemInactive)}
+              >
+                <Icon name="payments" />
+                <span className="font-sans text-xs font-medium uppercase tracking-widest">Plano</span>
+              </NavLink>
+            </li>
             {inInstance && (
               <li>
                 <NavLink
@@ -204,7 +224,11 @@ export function DashboardLayout() {
         <Outlet />
       </main>
 
-      <nav className="border-outline-variant/10 bg-surface-container-lowest fixed bottom-0 left-0 right-0 z-50 grid grid-cols-5 items-center border-t py-2 md:hidden">
+      <nav
+        className={`border-outline-variant/10 bg-surface-container-lowest fixed bottom-0 left-0 right-0 z-50 grid items-center border-t py-2 md:hidden ${
+          inInstance ? 'grid-cols-6' : 'grid-cols-4'
+        }`}
+      >
         <NavLink
           to={overviewPath}
           end
@@ -227,6 +251,17 @@ export function DashboardLayout() {
         >
           <Icon name="key" filled={location.pathname === tokensPath} />
           <span className="text-[9px] font-medium uppercase tracking-tighter">Tokens</span>
+        </NavLink>
+        <NavLink
+          to={paymentPath}
+          className={({ isActive }) =>
+            isActive
+              ? 'text-primary flex flex-col items-center gap-0.5'
+              : 'text-outline flex flex-col items-center gap-0.5'
+          }
+        >
+          <Icon name="payments" filled={location.pathname === paymentPath} />
+          <span className="text-[8px] font-medium uppercase tracking-tighter">Plano</span>
         </NavLink>
         {inInstance && (
           <NavLink

@@ -9,6 +9,8 @@ import { WhatsAppUserSession } from './whatsappUserSession';
 import { SocketGateway } from '../realtime/socketGateway';
 import { WebhookDispatcher } from '../realtime/webhookDispatcher';
 import { disableWebhookDeliveryForInstance } from '../services/instance.service';
+import { assertFreePlanCanSend } from '../services/billing.service';
+import { recordSend } from '../services/sentMessage.service';
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -129,7 +131,11 @@ export class WhatsAppSessionService implements IWhatsAppSessionService {
         503
       );
     }
-    return session.sendOtp(phoneNumber, code);
+    await assertFreePlanCanSend(userId);
+    await session.sendOtp(phoneNumber, code);
+    await recordSend(userId, instanceId, phoneNumber, 'success', undefined, code).catch(() => {
+      /* não re-lança; envio WhatsApp já concluiu */
+    });
   }
 
   async destroySession(userId: string, instanceId: string): Promise<void> {

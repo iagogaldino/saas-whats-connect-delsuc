@@ -85,6 +85,11 @@ export function ApiDocsPage() {
                 </a>
               </li>
               <li>
+                <a href="#incoming-payload" className="text-primary hover:underline">
+                  Payload: mensagem recebida
+                </a>
+              </li>
+              <li>
                 <a href="#webhook-incoming" className="text-primary hover:underline">
                   Webhook (mensagens recebidas)
                 </a>
@@ -179,8 +184,48 @@ Content-Type: application/json
   "message": "Olá! Sua solicitação foi recebida e já está em atendimento."
 }`}</CodeBlock>
           <p className="text-outline text-xs">
-            200: mensagem enviada. 400: validação/número sem WhatsApp. 503: sessão não conectada.
+            200: mensagem enviada. 400: validação/número sem WhatsApp. 403: limite diário do plano
+            grátis atingido (envios com sucesso, janela UTC; configurável com{' '}
+            <code className="font-mono">FREE_DAILY_SEND_LIMIT</code>). 503: sessão não conectada.
           </p>
+          <p className="text-outline mt-2 text-xs">
+            Para testar upgrade sem gateway, o servidor pode expor{' '}
+            <code className="font-mono">POST /api/v1/auth/billing/mock-checkout</code> com{' '}
+            <code className="font-mono">ENABLE_MOCK_BILLING=1</code> (não usar em produção real).
+          </p>
+        </Section>
+
+        <Section id="incoming-payload" title="Payload: mensagem recebida">
+          <p>
+            O corpo <code className="font-mono text-xs">JSON</code> de uma mensagem <strong>recebida</strong> (não
+            confundir com o envio via <code className="font-mono text-xs">send-code</code>) tem sempre a <strong>mesma
+            forma</strong> no <strong>webhook</strong> (<code className="font-mono text-xs">POST</code>) e no evento
+            Socket <code className="font-mono text-xs">whatsapp.message.received</code>. O tipo
+            <code className="font-mono text-xs"> TypeScript</code> é:
+          </p>
+          <CodeBlock>{`type WhatsAppIncomingMessageEvent = {
+  messageId: string;   // id da mensagem (Baileys)
+  from: string;        // JID do remetente, ex. "5511999999999@s.whatsapp.net"
+  to: string | null;  // pushName do contacto, se existir; senão null
+  timestamp: string;   // data/hora em ISO 8601 (UTC)
+  text: string;        // texto extraído (mensagem de texto)
+  userId: string;      // id do utilizador (conta) no painel
+  instanceId: string;  // id da instância WhatsApp desta ligação
+};`}</CodeBlock>
+          <p className="text-outline text-xs">
+            Só entram na fila de receção mensagens de conversa (não enviadas por si; o fluxo de envio de OTP usa outro
+            endpoint).
+          </p>
+          <p className="text-on-surface text-xs font-semibold">Exemplo (corpo exatamente enviado no webhook; idêntico no Socket)</p>
+          <CodeBlock>{`{
+  "messageId": "3EB0C767F26B1C0A0F8C",
+  "from": "5511999999999@s.whatsapp.net",
+  "to": "Nome do contacto",
+  "timestamp": "2025-04-24T18:32:11.000Z",
+  "text": "Olá, preciso de ajuda.",
+  "userId": "65a1b2c3d4e5f6789abcdef0",
+  "instanceId": "65a1b2c3d4e5f6789abcdef1"
+}`}</CodeBlock>
         </Section>
 
         <Section id="webhook-incoming" title="Webhook (mensagens recebidas)">
@@ -215,14 +260,14 @@ Authorization: Bearer <jwt-sessao>
 `}</CodeBlock>
           <p>
             <strong>Entrega:</strong> <code className="font-mono text-xs">POST</code> com{' '}
-            <code className="font-mono text-xs">Content-Type: application/json</code> e o mesmo objeto que o evento
-            Socket <code className="font-mono text-xs">whatsapp.message.received</code> (campos como{' '}
-            <code className="font-mono text-xs">messageId</code>, <code className="font-mono text-xs">from</code>,{' '}
-            <code className="font-mono text-xs">text</code>, <code className="font-mono text-xs">timestamp</code>, etc.).
-            Cabeçalho <code className="font-mono text-xs">X-Webhook-Signature: sha256=&lt;hex&gt;</code> — HMAC-SHA256 do
-            corpo <strong>em UTF-8 exatamente como enviado</strong> usando o segredo da instância. Em produção a URL
-            deve ser <code className="font-mono text-xs">https://</code>; em produção, <code className="font-mono text-xs">http://</code> só se{' '}
-            <code className="font-mono text-xs">WEBHOOK_INSECURE_HTTP=1</code> estiver definido no servidor.
+            <code className="font-mono text-xs">Content-Type: application/json</code> e corpo com a interface{' '}
+            <a href="#incoming-payload" className="text-primary font-medium underline-offset-2 hover:underline">
+              Payload: mensagem recebida
+            </a>
+            . O cabeçalho <code className="font-mono text-xs">X-Webhook-Signature: sha256=&lt;hex&gt;</code> contém
+            HMAC-SHA256 do corpo <strong>em UTF-8 exatamente como enviado</strong>, com o segredo da instância. Em
+            produção a URL deve ser <code className="font-mono text-xs">https://</code>; <code className="font-mono text-xs">http://</code> em
+            produção só com <code className="font-mono text-xs">WEBHOOK_INSECURE_HTTP=1</code> no servidor.
           </p>
         </Section>
 
@@ -250,11 +295,17 @@ socket.emit(
 );
 
 socket.on('whatsapp.message.received', (payload) => {
+  // payload: WhatsAppIncomingMessageEvent — ver secção "Payload: mensagem recebida"
   console.log(payload);
 });`}</CodeBlock>
           <p>
             Eventos principais: <code className="font-mono text-xs">whatsapp.message.send</code> e{' '}
-            <code className="font-mono text-xs">whatsapp.message.received</code>.
+            <code className="font-mono text-xs">whatsapp.message.received</code> — a forma de{' '}
+            <code className="font-mono text-xs">whatsapp.message.received</code> é a descrita em{' '}
+            <a href="#incoming-payload" className="text-primary font-medium underline-offset-2 hover:underline">
+              Payload: mensagem recebida
+            </a>
+            .
           </p>
         </Section>
 

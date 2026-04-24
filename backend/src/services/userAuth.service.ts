@@ -16,8 +16,15 @@ function signToken(userId: string, email: string): string {
   return jwt.sign({ sub: userId, email }, secret, options);
 }
 
-export function toPublicUser(user: { _id: { toString: () => string }; email: string }) {
-  return { id: user._id.toString(), email: user.email };
+export type PublicUserPlan = 'free' | 'paid';
+
+export function toPublicUser(user: { _id: { toString: () => string }; email: string; plan?: string }): {
+  id: string;
+  email: string;
+  plan: PublicUserPlan;
+} {
+  const plan: PublicUserPlan = user.plan === 'paid' ? 'paid' : 'free';
+  return { id: user._id.toString(), email: user.email, plan };
 }
 
 export async function registerUser(email: string, password: string) {
