@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { createInstance, listInstances, type WhatsAppInstance } from '../lib/api';
+import {
+  createInstance,
+  fetchListeningStatusForInstance,
+  listInstances,
+  startListeningMessagesForInstance,
+  stopListeningMessagesForInstance,
+  type WhatsAppInstance,
+} from '../lib/api';
 import { Icon } from '../components/dashboard/Icon';
 
 export function InstancesPage() {
@@ -8,6 +15,7 @@ export function InstancesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [togglingById, setTogglingById] = useState<Record<string, boolean>>({});
   const [name, setName] = useState('');
   const navigate = useNavigate();
 
@@ -16,7 +24,20 @@ export function InstancesPage() {
     setError(null);
     try {
       const result = await listInstances();
-      setItems(result);
+      const withListeningState = await Promise.all(
+        result.map(async (item) => {
+          try {
+            const listening = await fetchListeningStatusForInstance(item.id);
+            return {
+              ...item,
+              realtimeListeningEnabled: listening.enabled,
+            };
+          } catch {
+            return item;
+          }
+        })
+      );
+      setItems(withListeningState);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Falha ao carregar instancias');
     } finally {
@@ -40,6 +61,23 @@ export function InstancesPage() {
       setError(e instanceof Error ? e.message : 'Falha ao criar instancia');
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function handleToggleInstance(item: WhatsAppInstance) {
+    setError(null);
+    setTogglingById((prev) => ({ ...prev, [item.id]: true }));
+    try {
+      if (item.realtimeListeningEnabled) {
+        await stopListeningMessagesForInstance(item.id);
+      } else {
+        await startListeningMessagesForInstance(item.id);
+      }
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Falha ao alternar estado da instancia');
+    } finally {
+      setTogglingById((prev) => ({ ...prev, [item.id]: false }));
     }
   }
 
@@ -101,12 +139,30 @@ export function InstancesPage() {
                 <p className="text-on-surface text-sm font-semibold">{item.name}</p>
                 <p className="text-outline font-mono text-xs">{item.code}</p>
               </div>
-              <Link
-                to={`/instances/${item.id}`}
-                className="bg-primary text-on-primary rounded-lg px-4 py-2 text-xs font-bold uppercase"
-              >
-                Abrir dashboard
-              </Link>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleToggleInstance(item)}
+                  disabled={Boolean(togglingById[item.id])}
+                  className={`rounded-lg px-4 py-2 text-xs font-bold uppercase transition-colors disabled:opacity-60 ${
+                    item.realtimeListeningEnabled
+                      ? 'bg-slate-200 text-slate-900 hover:bg-slate-300'
+                      : 'bg-emerald-100 text-emerald-900 hover:bg-emerald-200'
+                  }`}
+                >
+                  {togglingById[item.id]
+                    ? 'Atualizando...'
+                    : item.realtimeListeningEnabled
+                      ? 'Desligar instancia'
+                      : 'Ligar instancia'}
+                </button>
+                <Link
+                  to={`/instances/${item.id}`}
+                  className="bg-primary text-on-primary rounded-lg px-4 py-2 text-xs font-bold uppercase"
+                >
+                  Abrir dashboard
+                </Link>
+              </div>
             </li>
           ))}
         </ul>
