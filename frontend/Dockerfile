@@ -17,7 +17,7 @@ ENV NODE_ENV=production
 ENV PORT=4173
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=optional && npm cache clean --force
+RUN npm ci && npm cache clean --force
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/vite.config.ts ./vite.config.ts
