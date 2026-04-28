@@ -33,6 +33,26 @@ npm run preview
 
 Também disponível por `npm run start` e `npm run start:prod`.
 
+### Docker (produção)
+
+```bash
+docker compose up -d --build
+```
+
+Abre em `http://localhost:4173`.
+
+Comandos úteis:
+
+```bash
+docker compose ps
+docker compose logs -f web
+docker compose down
+```
+
+Notas:
+
+- Ajuste `VITE_API_BASE_URL` e outras variáveis no `.env.production` antes do `docker compose up --build`.
+
 ## Configuração da API
 
 - Em dev, com `Base URL` vazia, o Vite proxy redireciona `/health` e `/api` para `http://localhost:3001`.
