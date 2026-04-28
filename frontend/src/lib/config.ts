@@ -32,12 +32,19 @@ export function getStoredApiBase(): string {
     fromStorage = '';
   }
 
+  const fromEnv = import.meta.env.VITE_API_BASE_URL?.trim();
+
+  // Em desenvolvimento, priorizar .env para evitar que um valor antigo salvo
+  // no localStorage continue sobrescrevendo a configuração atual.
+  if (import.meta.env.DEV && fromEnv) {
+    return normalizeBase(fromEnv);
+  }
+
   // Só sobrescreve o env se o usuário definiu uma base não vazia no painel.
   // Valor vazio no storage não pode mascarar VITE_API_BASE_URL do build de produção.
   if (fromStorage !== '') {
     return normalizeBase(fromStorage);
   }
-  const fromEnv = import.meta.env.VITE_API_BASE_URL?.trim();
   if (fromEnv) return normalizeBase(fromEnv);
   // Build de produção / preview: sem env, evita /api relativo no localhost:4173.
   if (import.meta.env.PROD) {

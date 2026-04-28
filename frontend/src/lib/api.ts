@@ -334,12 +334,37 @@ function redirectLoginIfUnauthorized(res: Response): void {
 }
 
 export async function fetchHealth(): Promise<HealthResponse> {
-  const res = await fetch(apiUrl('/health'), { cache: 'no-store' });
-  const data = (await res.json()) as HealthResponse;
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}`);
+  async function tryJsonHealth(path: string): Promise<HealthResponse | null> {
+    try {
+      const res = await fetch(apiUrl(path), { cache: 'no-store' });
+      if (!res.ok) return null;
+      const contentType = res.headers.get('content-type') ?? '';
+      if (!contentType.includes('application/json')) return null;
+      const data = (await res.json()) as Partial<HealthResponse>;
+      if (data.ok === true) return { ok: true };
+      return null;
+    } catch {
+      return null;
+    }
   }
-  return data;
+
+  const v1 = await tryJsonHealth('/api/v1/health');
+  if (v1) return v1;
+
+  // Compatibilidade com ambiente de desenvolvimento/proxy antigo.
+  const root = await tryJsonHealth('/health');
+  if (root) return root;
+
+  // Fallback para deployments antigos sem /api/v1/health:
+  // se /api estiver roteando para o backend, OPTIONS costuma responder 2xx via CORS.
+  try {
+    const probe = await fetch(apiUrl('/api/v1/auth/login'), { method: 'OPTIONS', cache: 'no-store' });
+    if (probe.ok) return { ok: true };
+    throw new Error(`HTTP ${probe.status}`);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Falha na rede';
+    throw new Error(message);
+  }
 }
 
 export async function fetchWhatsAppStatus(): Promise<WhatsAppStatusResponse> {

@@ -31,6 +31,9 @@ export function createApp(
   app.get('/health', (_req, res) => {
     res.json({ ok: true });
   });
+  app.get('/api/v1/health', (_req, res) => {
+    res.json({ ok: true });
+  });
 
   app.use('/api/v1/instances', createInstancesRouter());
   app.use(
