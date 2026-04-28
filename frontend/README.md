@@ -52,6 +52,7 @@ docker compose down
 Notas:
 
 - Ajuste `VITE_API_BASE_URL` e outras variáveis no `.env.production` antes do `docker compose up --build`.
+- O container final serve apenas arquivos estáticos via Nginx (modo produção), sem `vite preview`.
 
 ## Configuração da API
 

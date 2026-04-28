@@ -5,8 +5,4 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - '${PORT:-4173}:4173'
-    env_file:
-      - .env
-    environment:
-      PORT: ${PORT:-4173}
+      - '${PORT:-4173}:80'
