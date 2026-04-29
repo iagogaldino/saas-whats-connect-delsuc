@@ -36,8 +36,13 @@ jobs:
           git pull --ff-only origin main
 
           cd backend
-          # Cleanup legacy container name that conflicts on port 3001.
+          # Cleanup known legacy container name.
           docker rm -f insta-connect-backend || true
+          # Free backend port by removing any running container publishing 3001.
+          PORT_CONTAINERS="$(docker ps -q --filter publish=3001)"
+          if [ -n "$PORT_CONTAINERS" ]; then
+            docker rm -f $PORT_CONTAINERS
+          fi
           docker compose build --pull api
           docker compose up -d --remove-orphans api
           docker compose ps
