@@ -17,7 +17,6 @@ import {
   putWebhookConfigForInstance,
   postWebhookTestForInstance,
 } from '../../lib/api';
-import { getStoredApiBase, setStoredApiBase } from '../../lib/config';
 import { validateCode, validatePhone } from '../../lib/validation';
 import { Icon } from './Icon';
 
@@ -39,7 +38,6 @@ type DashboardHomeProps = {
 };
 
 export function DashboardHome({ instanceId, instanceName, instanceCode }: DashboardHomeProps) {
-  const [apiBase, setApiBase] = useState('');
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
 
@@ -84,10 +82,6 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
   const digitsPhone = phone.replace(/\D/g, '');
   const codeTrimmed = code.trim();
   const codeValid = codeTrimmed.length >= 1 && codeTrimmed.length <= 200;
-
-  useEffect(() => {
-    setApiBase(getStoredApiBase());
-  }, [instanceId]);
 
   useEffect(() => {
     if (!profilePhotoFile) {
@@ -396,12 +390,6 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
     }
   }, [whatsappReady, waitingForQr]);
 
-  function persistApiBase() {
-    setStoredApiBase(apiBase);
-    void loadHealth();
-    void loadWhatsAppStatus();
-  }
-
   async function handleSend(e: FormEvent) {
     e.preventDefault();
     const errPhone = validatePhone(digitsPhone);
@@ -417,7 +405,6 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
       return;
     }
 
-    setStoredApiBase(apiBase);
     setSendLoading(true);
     try {
       const res = await sendCode(instanceId, { phoneNumber: digitsPhone, message: codeTrimmed });
@@ -796,25 +783,6 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
             </h2>
             <form className="space-y-6" onSubmit={handleSend}>
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                <div className="col-span-full md:col-span-2" id="api-base-field">
-                  <label className="text-outline mb-2 block text-[10px] font-black uppercase tracking-widest">
-                    Base URL
-                  </label>
-                  <div className="group relative">
-                    <input
-                      className="text-on-surface focus:ring-primary/20 w-full rounded-lg border-none bg-surface-container-low p-3 font-mono text-sm transition-all focus:ring-2"
-                      type="text"
-                      placeholder="vazio = proxy Vite (dev)"
-                      value={apiBase}
-                      onChange={(e) => setApiBase(e.target.value)}
-                      onBlur={() => persistApiBase()}
-                    />
-                    <span className="text-tertiary absolute right-3 top-3 text-[10px] font-bold">PERSISTED</span>
-                  </div>
-                  <p className="text-outline mt-1 text-[10px]">
-                    Vazio em dev usa o proxy; URL completa exige CORS no backend.
-                  </p>
-                </div>
                 <div>
                   <label className="text-outline mb-2 block text-[10px] font-black uppercase tracking-widest">
                     Phone Number
@@ -839,16 +807,16 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
                     Pode incluir +, espaços e traços; o envio usa só os dígitos (10 a 15).
                   </p>
                 </div>
-                <div>
+                <div className="col-span-full md:col-span-2">
                   <label className="text-outline mb-2 block text-[10px] font-black uppercase tracking-widest">
                     Mensagem
                   </label>
                   <div className="relative">
-                    <input
+                    <textarea
                       className="text-on-surface focus:ring-primary/20 w-full rounded-lg border-none bg-surface-container-low p-3 font-mono text-sm transition-all focus:ring-2"
                       maxLength={200}
                       placeholder="Digite a mensagem para enviar no WhatsApp"
-                      type="text"
+                      rows={3}
                       value={code}
                       onChange={(e) => setCode(e.target.value.slice(0, 200))}
                     />
