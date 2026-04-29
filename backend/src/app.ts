@@ -35,7 +35,7 @@ export function createApp(
     res.json({ ok: true });
   });
 
-  app.use('/api/v1/instances', createInstancesRouter());
+  app.use('/api/v1/instances', createInstancesRouter(whatsappSessions));
   app.use(
     '/api/v1/instances/:instanceId/whatsapp',
     createWhatsAppRouter(whatsappSessions, webhookDispatcher)

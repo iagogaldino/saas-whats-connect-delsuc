@@ -184,12 +184,19 @@ export class SocketGateway {
     enabled: boolean
   ): Promise<{ enabled: boolean; connectedClients: number }> {
     const state = await this.ensureState(userId, instanceId);
-    state.enabled = enabled;
+
     if (this.persistListeningStateHandler) {
       await this.persistListeningStateHandler(userId, instanceId, enabled);
     }
 
-    if (!enabled) {
+    // Confirma no storage persistido qual foi o estado final efetivo antes de responder.
+    if (this.loadListeningStateHandler) {
+      state.enabled = await this.loadListeningStateHandler(userId, instanceId);
+    } else {
+      state.enabled = enabled;
+    }
+
+    if (!state.enabled) {
       for (const socketId of state.socketIds) {
         this.io?.sockets.sockets.get(socketId)?.disconnect(true);
       }

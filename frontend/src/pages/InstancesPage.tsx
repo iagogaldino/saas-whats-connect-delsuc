@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   createInstance,
+  deleteInstance,
   fetchListeningStatusForInstance,
   listInstances,
   startListeningMessagesForInstance,
@@ -16,6 +17,7 @@ export function InstancesPage() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [togglingById, setTogglingById] = useState<Record<string, boolean>>({});
+  const [deletingById, setDeletingById] = useState<Record<string, boolean>>({});
   const [name, setName] = useState('');
   const navigate = useNavigate();
 
@@ -78,6 +80,26 @@ export function InstancesPage() {
       setError(e instanceof Error ? e.message : 'Falha ao alternar estado da instancia');
     } finally {
       setTogglingById((prev) => ({ ...prev, [item.id]: false }));
+    }
+  }
+
+  async function handleDeleteInstance(item: WhatsAppInstance) {
+    if (
+      !window.confirm(
+        `Remover a instância "${item.name}"? Esta ação exclui histórico, logs e arquivos da sessão WhatsApp.`
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setDeletingById((prev) => ({ ...prev, [item.id]: true }));
+    try {
+      await deleteInstance(item.id);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Falha ao remover instancia');
+    } finally {
+      setDeletingById((prev) => ({ ...prev, [item.id]: false }));
     }
   }
 
@@ -155,6 +177,14 @@ export function InstancesPage() {
                     : item.realtimeListeningEnabled
                       ? 'Desligar instancia'
                       : 'Ligar instancia'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteInstance(item)}
+                  disabled={Boolean(deletingById[item.id])}
+                  className="bg-red-100 text-red-800 hover:bg-red-200 rounded-lg px-4 py-2 text-xs font-bold uppercase transition-colors disabled:opacity-60"
+                >
+                  {deletingById[item.id] ? 'Removendo...' : 'Remover instancia'}
                 </button>
                 <Link
                   to={`/instances/${item.id}`}

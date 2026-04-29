@@ -21,8 +21,6 @@ export function DashboardLayout() {
   const supportPhone = '74988420307';
   const inInstance = Boolean(instanceId);
   const overviewPath = inInstance ? `/instances/${instanceId}` : '/app';
-  const historyPath = inInstance ? `/instances/${instanceId}/history` : '/app/history';
-  const logsPath = inInstance ? `/instances/${instanceId}/logs` : '/app/logs';
   const tokensPath = '/app/tokens';
   const paymentPath = '/app/pagamento';
 
@@ -74,30 +72,6 @@ export function DashboardLayout() {
             >
               Plano
             </NavLink>
-            {inInstance && (
-              <NavLink
-                to={historyPath}
-                className={({ isActive }) =>
-                  isActive
-                    ? 'border-b-2 border-slate-700 pb-1 font-sans text-sm font-bold tracking-tight text-slate-900'
-                    : 'font-sans text-sm tracking-tight text-slate-600 hover:text-slate-900'
-                }
-              >
-                Histórico
-              </NavLink>
-            )}
-            {inInstance && (
-              <NavLink
-                to={logsPath}
-                className={({ isActive }) =>
-                  isActive
-                    ? 'border-b-2 border-slate-700 pb-1 font-sans text-sm font-bold tracking-tight text-slate-900'
-                    : 'font-sans text-sm tracking-tight text-slate-600 hover:text-slate-900'
-                }
-              >
-                Logs
-              </NavLink>
-            )}
             <NavLink
               to="/docs"
               className={({ isActive }) =>
@@ -129,26 +103,6 @@ export function DashboardLayout() {
       </header>
 
       <aside className="bg-slate-100 fixed left-0 top-0 z-40 hidden h-screen w-64 flex-col pb-4 pt-16 lg:flex">
-        <div className="flex items-center gap-3 px-6 py-4">
-          <div className="bg-primary flex h-8 w-8 items-center justify-center rounded text-on-primary">
-            <Icon name="hub" className="text-lg" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-bold leading-none text-slate-900">Whatsapp Connect</p>
-            <p className="mt-1 truncate text-[10px] text-slate-600" title={user?.email}>
-              {user?.email ?? '—'}
-            </p>
-            {user && (
-              <p
-                className={`mt-1.5 text-[10px] font-bold uppercase tracking-[0.2em] ${
-                  user.plan === 'paid' ? 'text-slate-800' : 'text-slate-600'
-                }`}
-              >
-                {user.plan === 'paid' ? 'Premium' : 'Limitado'}
-              </p>
-            )}
-          </div>
-        </div>
         <nav className="mt-4 flex-1">
           <ul className="space-y-1 pr-4">
             <li>
@@ -175,28 +129,6 @@ export function DashboardLayout() {
                 <span className="font-sans text-xs font-medium uppercase tracking-widest">Plano</span>
               </NavLink>
             </li>
-            {inInstance && (
-              <li>
-                <NavLink
-                  to={historyPath}
-                  className={({ isActive }) => (isActive ? navItemActive : navItemInactive)}
-                >
-                  <Icon name="history" />
-                  <span className="font-sans text-xs font-medium uppercase tracking-widest">History</span>
-                </NavLink>
-              </li>
-            )}
-            {inInstance && (
-              <li>
-                <NavLink
-                  to={logsPath}
-                  className={({ isActive }) => (isActive ? navItemActive : navItemInactive)}
-                >
-                  <Icon name="receipt_long" />
-                  <span className="font-sans text-xs font-medium uppercase tracking-widest">Logs</span>
-                </NavLink>
-              </li>
-            )}
             <li>
               <NavLink
                 to="/docs"
@@ -242,9 +174,7 @@ export function DashboardLayout() {
       </main>
 
       <nav
-        className={`border-outline-variant/10 bg-surface-container-lowest fixed bottom-0 left-0 right-0 z-50 grid items-center border-t py-2 md:hidden ${
-          inInstance ? 'grid-cols-6' : 'grid-cols-4'
-        }`}
+        className="border-outline-variant/10 bg-surface-container-lowest fixed bottom-0 left-0 right-0 z-50 grid grid-cols-4 items-center border-t py-2 md:hidden"
       >
         <NavLink
           to={overviewPath}
@@ -280,19 +210,6 @@ export function DashboardLayout() {
           <Icon name="payments" filled={location.pathname === paymentPath} />
           <span className="text-[8px] font-medium uppercase tracking-tighter">Plano</span>
         </NavLink>
-        {inInstance && (
-          <NavLink
-            to={historyPath}
-            className={({ isActive }) =>
-              isActive
-                ? 'text-primary flex flex-col items-center gap-0.5'
-                : 'text-outline flex flex-col items-center gap-0.5'
-            }
-          >
-            <Icon name="history" filled={location.pathname === historyPath} />
-            <span className="text-[9px] font-medium uppercase tracking-tighter">Hist</span>
-          </NavLink>
-        )}
         <NavLink
           to="/docs"
           className={({ isActive }) =>
@@ -304,19 +221,6 @@ export function DashboardLayout() {
           <Icon name="menu_book" filled={location.pathname === '/docs'} />
           <span className="text-[9px] font-medium uppercase tracking-tighter">Docs</span>
         </NavLink>
-        {inInstance && (
-          <NavLink
-            to={logsPath}
-            className={({ isActive }) =>
-              isActive
-                ? 'text-primary flex flex-col items-center gap-0.5'
-                : 'text-outline flex flex-col items-center gap-0.5'
-            }
-          >
-            <Icon name="receipt_long" filled={location.pathname === logsPath} />
-            <span className="text-[9px] font-medium uppercase tracking-tighter">Logs</span>
-          </NavLink>
-        )}
       </nav>
     </>
   );

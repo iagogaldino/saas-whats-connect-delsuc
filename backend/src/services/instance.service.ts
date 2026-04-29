@@ -1,6 +1,8 @@
 import crypto from 'crypto';
 import mongoose from 'mongoose';
 import { AppError } from '../errors/AppError';
+import { ApiRequestLog } from '../models/ApiRequestLog';
+import { SentMessage } from '../models/SentMessage';
 import { WhatsAppInstance } from '../models/WhatsAppInstance';
 
 export type WhatsAppInstanceListItem = {
@@ -292,4 +294,24 @@ export async function setWebhookConfig(
     result.secret = newSecret;
   }
   return result;
+}
+
+export type RemoveInstanceCascadeResult = {
+  id: string;
+  code: string;
+};
+
+export async function removeInstanceCascade(
+  userId: string,
+  instanceRef: string
+): Promise<RemoveInstanceCascadeResult> {
+  const owned = await getOwnedInstanceOrThrow(userId, instanceRef);
+  const instanceObjectId = new mongoose.Types.ObjectId(owned.id);
+  const userObjectId = new mongoose.Types.ObjectId(userId);
+
+  await SentMessage.deleteMany({ userId: userObjectId, instanceId: instanceObjectId });
+  await ApiRequestLog.deleteMany({ userId: userObjectId, instanceId: instanceObjectId });
+  await WhatsAppInstance.deleteOne({ _id: instanceObjectId, userId: userObjectId });
+
+  return { id: owned.id, code: owned.code };
 }

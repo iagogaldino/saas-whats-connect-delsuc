@@ -1,5 +1,6 @@
 import QRCode from 'react-qr-code';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import {
   fetchWhatsAppProfilePhotoForInstance,
   fetchListeningStatusForInstance,
@@ -470,6 +471,18 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            to={`/instances/${instanceId}/history`}
+            className="border-outline-variant text-outline hover:bg-surface-container-high rounded px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide transition-colors"
+          >
+            History
+          </Link>
+          <Link
+            to={`/instances/${instanceId}/logs`}
+            className="border-outline-variant text-outline hover:bg-surface-container-high rounded px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide transition-colors"
+          >
+            Logs
+          </Link>
           <span className="text-outline text-[10px] font-bold uppercase tracking-widest">
             Last sync: {lastSync}
           </span>

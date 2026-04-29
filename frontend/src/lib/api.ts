@@ -796,6 +796,24 @@ export async function createInstance(name?: string): Promise<WhatsAppInstance> {
   return data as WhatsAppInstance;
 }
 
+export async function deleteInstance(instanceId: string): Promise<{ ok: true }> {
+  const res = await fetch(apiUrl(`/api/v1/instances/${encodeURIComponent(instanceId)}`), {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  redirectLoginIfUnauthorized(res);
+  const data = (await res.json().catch(() => ({}))) as { ok?: true } | ApiErrorBody;
+  if (!res.ok) {
+    const err = data as ApiErrorBody;
+    const msg = err.error ?? `Erro HTTP ${res.status}`;
+    const e = new Error(msg) as Error & { status: number; details?: unknown };
+    e.status = res.status;
+    e.details = err.details;
+    throw e;
+  }
+  return { ok: true };
+}
+
 export type ForgotPasswordResponse = {
   ok: true;
   message: string;
