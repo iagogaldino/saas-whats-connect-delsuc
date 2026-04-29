@@ -80,6 +80,11 @@ export function ApiDocsPage() {
                 </a>
               </li>
               <li>
+                <a href="#contacts" className="text-primary hover:underline">
+                  Contatos da agenda (REST)
+                </a>
+              </li>
+              <li>
                 <a href="#send-code" className="text-primary hover:underline">
                   Envio de mensagem
                 </a>
@@ -118,10 +123,11 @@ Authorization: Bearer <jwt-ou-api-key>
 Content-Type: application/json
 { "name": "Atendimento Comercial" }
 
-# Endpoints WhatsApp (pareamento; detalhes na secção Pareamento por QR)
+# Endpoints WhatsApp (pareamento e agenda; detalhes em Pareamento por QR e Contatos)
 POST ${base}/api/v1/instances/<instanceId>/whatsapp/pairing/start
 GET  ${base}/api/v1/instances/<instanceId>/whatsapp/status
 GET  ${base}/api/v1/instances/<instanceId>/whatsapp/qr
+GET  ${base}/api/v1/instances/<instanceId>/whatsapp/contacts
 
 # Atualizar foto de perfil (JWT apenas, multipart)
 PUT  ${base}/api/v1/instances/<instanceId>/whatsapp/profile-photo
@@ -149,10 +155,19 @@ Content-Type: multipart/form-data (campo: photo)`}</CodeBlock>
             <code className="font-mono text-xs">POST …/pairing/start</code>: responde <strong>200</strong> com{' '}
             <code className="font-mono text-xs">alreadyConnected: true</code> se a sessão já estiver conectada, ou{' '}
             <strong>202</strong> com <code className="font-mono text-xs">alreadyConnected: false</code> ao iniciar
-            pareamento. <code className="font-mono text-xs">GET …/qr</code> devolve{' '}
+            pareamento.             <code className="font-mono text-xs">GET …/qr</code> devolve{' '}
             <code className="font-mono text-xs">&#123; &quot;qr&quot;: string | null &#125;</code> — a string é o
             conteúdo bruto do QR; no cliente, gere a imagem com uma biblioteca de QR (não é URL nem PNG da API). Para
             desconectar: <code className="font-mono text-xs">POST …/whatsapp/logout</code> (também com Bearer).
+          </p>
+          <p>
+            Depois de <code className="font-mono text-xs">whatsappReady: true</code>, a sessão pode sincronizar contatos na
+            agenda WhatsApp; para listá-los via REST use{' '}
+            <code className="font-mono text-xs">GET …/whatsapp/contacts</code> — mesma autenticação Bearer (
+            <a href="#contacts" className="text-primary font-medium underline-offset-2 hover:underline">
+              Contatos da agenda (REST)
+            </a>
+            ).
           </p>
           <p>
             Para trocar a foto da conta conectada, use{' '}
@@ -174,6 +189,44 @@ curl -sS -H "Authorization: Bearer $TOKEN" \\
 curl -sS -H "Authorization: Bearer $TOKEN" \\
   "$API_BASE/api/v1/instances/$INST/whatsapp/qr"
 `}</CodeBlock>
+        </Section>
+
+        <Section id="contacts" title="Contatos da agenda (REST)">
+          <p>
+            <strong>Endpoint:</strong>{' '}
+            <code className="font-mono text-xs">GET /api/v1/instances/&lt;instanceId&gt;/whatsapp/contacts</code>.
+            Autenticação:{' '}
+            <code className="font-mono text-xs">Authorization: Bearer &lt;JWT de sessão ou chave de API otp_…&gt;</code>; o{' '}
+            <code className="font-mono text-xs">instanceId</code> segue as mesmas regras das outras rotas (ObjectId ou
+            código da instância).
+          </p>
+          <p>
+            Devolve contatos sincronizados pela sessão Baileys correspondentes à agenda com <strong>nome definido</strong>,
+            ordenados por nome ascendente. Pode responder <code className="font-mono text-xs">&#123; &quot;items&quot;: [] &#125;</code> até
+            existir dados sincronizados ou quando ainda não houver entradas com nome persistido nesta instância.
+          </p>
+          <p>
+            O tipo <code className="font-mono text-xs">TypeScript</code> de cada elemento é:
+          </p>
+          <CodeBlock>{`type WhatsAppContact = {
+  jid: string;     // JID do contacto em @s.whatsapp.net
+  name: string;
+  phone: string;   // dígitos inferidos do JID do utilizador
+  notify?: string;  // opcional
+};
+
+type WhatsAppContactsBody = {
+  items: WhatsAppContact[];
+};`}</CodeBlock>
+          <CodeBlock>{`# Listar agenda (JWT ou api key — mesmo padrão do pareamento)
+export API_BASE='${base}'
+export TOKEN='sua_chave_ou_jwt'
+export INST='<instanceId-ou-codigo-inst-xxx>'
+
+curl -sS -H "Authorization: Bearer $TOKEN" \\
+  "$API_BASE/api/v1/instances/$INST/whatsapp/contacts"
+
+# Resposta exemplo: { "items": [ { "jid": "...", "name": "...", "phone": "...", "notify": "..." } ] }`}</CodeBlock>
         </Section>
 
         <Section id="send-code" title="Envio de mensagem">
