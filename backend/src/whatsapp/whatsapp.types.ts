@@ -25,9 +25,10 @@
  *
  * ## GET /api/v1/instances/:instanceId/whatsapp/contacts
  * - Auth: Bearer (JWT ou API key)
- * - 200: `{ items: WhatsAppContact[] }` — contatos salvos na agenda do WhatsApp
- *   sincronizados pela sessão Baileys, ordenados por nome ASC. Lista vazia
- *   enquanto não houver sincronização.
+ * - Query: `filter` opcional — `named` (omissão) só contactos com nome de agenda
+ *   não vazio; `all` todos os contactos utilizador persistidos para a instância.
+ * - 200: `{ items: WhatsAppContact[] }` — sincronizados pela sessão Baileys;
+ *   `named` ordenado por nome ASC; `all` por nome e JID. Lista vazia até haver dados.
  *
  * ## POST /api/v1/auth/instances/:instanceId/send-code
  * - Auth: Bearer
@@ -100,8 +101,12 @@ export interface IWhatsAppSessionService {
   /** Cota (plano grátis) e registo de sucesso em histórico aplicam-se aqui. */
   sendOtp(userId: string, instanceId: string, phoneNumber: string, code: string): Promise<void>;
   destroySession(userId: string, instanceId: string): Promise<void>;
-  /** Contatos salvos na agenda do WhatsApp para a instância, lidos do Mongo. */
-  getSavedContacts(userId: string, instanceId: string): Promise<WhatsAppContact[]>;
+  /** Contactos da instância no Mongo; `filter` define se só com nome de agenda ou todos. */
+  getSavedContacts(
+    userId: string,
+    instanceId: string,
+    opts?: { filter?: 'named' | 'all' }
+  ): Promise<WhatsAppContact[]>;
   getListeningStatus(userId: string, instanceId: string): Promise<WhatsAppListeningStatusBody>;
   setListeningEnabled(
     userId: string,

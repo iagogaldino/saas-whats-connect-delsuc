@@ -441,11 +441,18 @@ export type WhatsAppContact = {
 
 type WhatsAppContactsResponse = { items: WhatsAppContact[] };
 
+export type ContactsListFilter = 'named' | 'all';
+
 export async function fetchWhatsAppContactsForInstance(
-  instanceId: string
+  instanceId: string,
+  options?: { filter?: ContactsListFilter }
 ): Promise<WhatsAppContact[]> {
+  const qs =
+    options?.filter && options.filter !== 'named'
+      ? `?filter=${encodeURIComponent(options.filter)}`
+      : '';
   const res = await fetch(
-    apiUrl(`/api/v1/instances/${encodeURIComponent(instanceId)}/whatsapp/contacts`),
+    apiUrl(`/api/v1/instances/${encodeURIComponent(instanceId)}/whatsapp/contacts${qs}`),
     {
       headers: authHeaders(),
       cache: 'no-store',

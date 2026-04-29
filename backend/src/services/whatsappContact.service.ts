@@ -83,20 +83,30 @@ export async function upsertContacts(
   await WhatsAppContact.bulkWrite(ops, { ordered: false });
 }
 
+/** `named`: só contactos com nome de agenda gravado (comportamento original). `all`: todos os contactos utilizador sincronizados na coleção para a instância. */
+export type ListContactsFilter = 'named' | 'all';
+
 /**
- * Retorna os contatos salvos na agenda (com `name` definido) da instância,
- * ordenados por nome ASC.
+ * Retorna contactos da instância.
+ * Por defeito só entradas com `name` não vazio (agenda).
+ * Com `filter: 'all'`, inclui qualquer entrada persistida (`@s.whatsapp.net`).
  */
 export async function listSavedContactsForUser(
   userId: string,
-  instanceId: string
+  instanceId: string,
+  opts?: { filter?: ListContactsFilter }
 ): Promise<SavedContactItem[]> {
-  const docs = await WhatsAppContact.find({
-    userId: new mongoose.Types.ObjectId(userId),
-    instanceId: new mongoose.Types.ObjectId(instanceId),
-    name: { $exists: true, $ne: '' },
-  })
-    .sort({ name: 1 })
+  const uid = new mongoose.Types.ObjectId(userId);
+  const iid = new mongoose.Types.ObjectId(instanceId);
+  const base = { userId: uid, instanceId: iid };
+
+  const filter =
+    opts?.filter === 'all'
+      ? base
+      : { ...base, name: { $exists: true, $ne: '' } };
+
+  const docs = await WhatsAppContact.find(filter)
+    .sort(opts?.filter === 'all' ? { name: 1, jid: 1 } : { name: 1 })
     .lean();
 
   return docs.map((doc) => ({

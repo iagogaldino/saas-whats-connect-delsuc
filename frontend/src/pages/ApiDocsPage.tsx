@@ -127,7 +127,7 @@ Content-Type: application/json
 POST ${base}/api/v1/instances/<instanceId>/whatsapp/pairing/start
 GET  ${base}/api/v1/instances/<instanceId>/whatsapp/status
 GET  ${base}/api/v1/instances/<instanceId>/whatsapp/qr
-GET  ${base}/api/v1/instances/<instanceId>/whatsapp/contacts
+GET  ${base}/api/v1/instances/<instanceId>/whatsapp/contacts[?filter=named|all]
 
 # Atualizar foto de perfil (JWT apenas, multipart)
 PUT  ${base}/api/v1/instances/<instanceId>/whatsapp/profile-photo
@@ -201,9 +201,13 @@ curl -sS -H "Authorization: Bearer $TOKEN" \\
             código da instância).
           </p>
           <p>
-            Devolve contatos sincronizados pela sessão Baileys correspondentes à agenda com <strong>nome definido</strong>,
-            ordenados por nome ascendente. Pode responder <code className="font-mono text-xs">&#123; &quot;items&quot;: [] &#125;</code> até
-            existir dados sincronizados ou quando ainda não houver entradas com nome persistido nesta instância.
+            <strong>Query:</strong> <code className="font-mono text-xs">filter</code> opcional —{' '}
+            <code className="font-mono text-xs">named</code> (omissão, igual à rota já existente): só contactos com{' '}
+            <strong>nome de agenda</strong> gravado não vazio, ordenados por nome ascendente.{' '}
+            <code className="font-mono text-xs">filter=all</code>: todos os contactos de utilizador (
+            <code className="font-mono text-xs">@s.whatsapp.net</code>) já persistidos para a instância (inclui sem nome na
+            agenda), ordenação por nome e JID. Pode responder{' '}
+            <code className="font-mono text-xs">&#123; &quot;items&quot;: [] &#125;</code> até existir dados na base.
           </p>
           <p>
             O tipo <code className="font-mono text-xs">TypeScript</code> de cada elemento é:
@@ -225,6 +229,10 @@ export INST='<instanceId-ou-codigo-inst-xxx>'
 
 curl -sS -H "Authorization: Bearer $TOKEN" \\
   "$API_BASE/api/v1/instances/$INST/whatsapp/contacts"
+
+# Todos os contactos sincronizados (não só com nome de agenda):
+curl -sS -H "Authorization: Bearer $TOKEN" \\
+  "$API_BASE/api/v1/instances/$INST/whatsapp/contacts?filter=all"
 
 # Resposta exemplo: { "items": [ { "jid": "...", "name": "...", "phone": "...", "notify": "..." } ] }`}</CodeBlock>
         </Section>

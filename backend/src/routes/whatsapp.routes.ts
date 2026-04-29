@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import multer, { MulterError } from 'multer';
+import { z } from 'zod';
 import { requireAuth } from '../middleware/requireAuth';
 import { requireJwt } from '../middleware/requireJwt';
 import { requireInstanceAccess } from '../middleware/requireInstanceAccess';
@@ -13,6 +14,10 @@ import {
 } from '../services/instance.service';
 import { setWebhookBodySchema } from '../validation/webhook.schema';
 import type { IWhatsAppSessionService, WhatsAppIncomingMessageEvent } from '../whatsapp';
+
+const contactsQuerySchema = z.object({
+  filter: z.enum(['named', 'all']).optional().default('named'),
+});
 
 export function createWhatsAppRouter(
   manager: IWhatsAppSessionService,
@@ -65,9 +70,15 @@ export function createWhatsAppRouter(
 
   router.get('/contacts', async (req, res, next) => {
     try {
+      const parsed = contactsQuerySchema.safeParse(req.query);
+      if (!parsed.success) {
+        return next(parsed.error);
+      }
       const userId = req.user!.id;
       const instanceId = req.instance!.id;
-      const items = await manager.getSavedContacts(userId, instanceId);
+      const items = await manager.getSavedContacts(userId, instanceId, {
+        filter: parsed.data.filter,
+      });
       res.json({ items });
     } catch (e) {
       next(e);

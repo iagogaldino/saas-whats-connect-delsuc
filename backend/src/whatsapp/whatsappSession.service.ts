@@ -178,8 +178,12 @@ export class WhatsAppSessionService implements IWhatsAppSessionService {
     });
   }
 
-  async getSavedContacts(userId: string, instanceId: string): Promise<WhatsAppContact[]> {
-    return listSavedContactsForUser(userId, instanceId);
+  async getSavedContacts(
+    userId: string,
+    instanceId: string,
+    opts?: { filter?: 'named' | 'all' }
+  ): Promise<WhatsAppContact[]> {
+    return listSavedContactsForUser(userId, instanceId, opts);
   }
 
   async destroySession(userId: string, instanceId: string): Promise<void> {
