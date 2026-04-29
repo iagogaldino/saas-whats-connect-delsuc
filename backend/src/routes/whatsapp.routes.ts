@@ -1,7 +1,9 @@
 import { Router } from 'express';
+import multer, { MulterError } from 'multer';
 import { requireAuth } from '../middleware/requireAuth';
 import { requireJwt } from '../middleware/requireJwt';
 import { requireInstanceAccess } from '../middleware/requireInstanceAccess';
+import { AppError } from '../errors/AppError';
 import type { WebhookDispatcher } from '../realtime/webhookDispatcher';
 import {
   getWebhookConfigForUser,
@@ -17,6 +19,19 @@ export function createWhatsAppRouter(
   webhookDispatcher: WebhookDispatcher
 ): Router {
   const router = Router({ mergeParams: true });
+  const maxPhotoBytes = 2 * 1024 * 1024;
+  const allowedPhotoMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+  const uploadProfilePhoto = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: maxPhotoBytes, files: 1 },
+    fileFilter: (_req, file, cb) => {
+      if (!allowedPhotoMimeTypes.has(file.mimetype)) {
+        cb(new AppError('Formato inválido. Use JPG, PNG ou WEBP.', 400));
+        return;
+      }
+      cb(null, true);
+    },
+  }).single('photo');
   router.use(requireAuth, requireInstanceAccess);
 
   router.post('/pairing/start', (req, res) => {
@@ -54,6 +69,42 @@ export function createWhatsAppRouter(
       const instanceId = req.instance!.id;
       await manager.destroySession(userId, instanceId);
       res.status(200).json({ ok: true });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.put('/profile-photo', requireJwt, (req, res, next) => {
+    uploadProfilePhoto(req, res, async (uploadErr) => {
+      if (uploadErr) {
+        if (uploadErr instanceof MulterError && uploadErr.code === 'LIMIT_FILE_SIZE') {
+          return next(new AppError('Arquivo muito grande. Máximo permitido: 2MB.', 400));
+        }
+        return next(uploadErr);
+      }
+      if (!req.file?.buffer || !req.file.mimetype) {
+        return next(new AppError('Envie a imagem no campo "photo" (multipart/form-data).', 400));
+      }
+      if (req.file.size <= 0) {
+        return next(new AppError('O arquivo enviado está vazio.', 400));
+      }
+      try {
+        const userId = req.user!.id;
+        const instanceId = req.instance!.id;
+        await manager.updateProfilePhoto(userId, instanceId, req.file.buffer, req.file.mimetype);
+        res.status(200).json({ ok: true });
+      } catch (e) {
+        next(e);
+      }
+    });
+  });
+
+  router.get('/profile-photo', requireJwt, async (req, res, next) => {
+    try {
+      const userId = req.user!.id;
+      const instanceId = req.instance!.id;
+      const url = await manager.getProfilePhotoUrl(userId, instanceId);
+      res.status(200).json({ url });
     } catch (e) {
       next(e);
     }

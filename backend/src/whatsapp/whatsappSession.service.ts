@@ -123,6 +123,33 @@ export class WhatsAppSessionService implements IWhatsAppSessionService {
     return !s.isReady();
   }
 
+  async updateProfilePhoto(
+    userId: string,
+    instanceId: string,
+    imageBuffer: Buffer,
+    mimeType: string
+  ): Promise<void> {
+    const session = this.sessions.get(this.sessionKey(userId, instanceId));
+    if (!session) {
+      throw new AppError(
+        'WhatsApp não iniciado. Use o painel para conectar (Gerar QR) antes de alterar a foto.',
+        503
+      );
+    }
+    await session.updateProfilePhoto(imageBuffer, mimeType);
+  }
+
+  async getProfilePhotoUrl(userId: string, instanceId: string): Promise<string | null> {
+    const session = this.sessions.get(this.sessionKey(userId, instanceId));
+    if (!session) {
+      throw new AppError(
+        'WhatsApp não iniciado. Use o painel para conectar (Gerar QR) antes de consultar a foto.',
+        503
+      );
+    }
+    return session.getProfilePhotoUrl();
+  }
+
   async sendOtp(userId: string, instanceId: string, phoneNumber: string, code: string): Promise<void> {
     const session = this.sessions.get(this.sessionKey(userId, instanceId));
     if (!session) {

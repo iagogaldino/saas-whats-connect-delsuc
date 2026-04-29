@@ -1,5 +1,6 @@
 import qrcode from 'qrcode-terminal';
 import { rm } from 'fs/promises';
+import { Readable } from 'stream';
 import type { Logger } from 'pino';
 import makeWASocket, {
   DisconnectReason,
@@ -35,6 +36,16 @@ function digitsOnly(phone: string): string {
 
 function buildOtpMessage(code: string): string {
   return code;
+}
+
+function toMainUserJid(fullJid: string | undefined): string | null {
+  if (!fullJid) return null;
+  const atIdx = fullJid.indexOf('@');
+  if (atIdx <= 0) return null;
+  const userPart = fullJid.slice(0, atIdx);
+  const user = userPart.split(':')[0];
+  if (!user) return null;
+  return `${user}@s.whatsapp.net`;
 }
 
 /**
@@ -255,6 +266,52 @@ export class WhatsAppUserSession {
         'Serviço WhatsApp indisponível ao enviar a mensagem.',
         503
       );
+    }
+  }
+
+  async updateProfilePhoto(imageBuffer: Buffer, mimeType: string): Promise<void> {
+    if (!this.ready || !this.sock) {
+      throw new AppError(
+        'Serviço WhatsApp indisponível. Aguarde a conexão ou escaneie o QR code no painel.',
+        503
+      );
+    }
+    const ownJid = toMainUserJid(this.sock.user?.id);
+    if (!ownJid) {
+      throw new AppError('Não foi possível identificar a conta WhatsApp conectada.', 503);
+    }
+    try {
+      await this.sock.updateProfilePicture(ownJid, { stream: Readable.from(imageBuffer) });
+      this.log.info({ ownJid, mimeType }, 'WhatsApp: foto de perfil atualizada');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.log.error({ err: message }, 'WhatsApp: falha ao atualizar foto de perfil');
+      throw new AppError('Não foi possível atualizar a foto de perfil do WhatsApp.', 503);
+    }
+  }
+
+  async getProfilePhotoUrl(): Promise<string | null> {
+    if (!this.ready || !this.sock) {
+      throw new AppError(
+        'Serviço WhatsApp indisponível. Aguarde a conexão ou escaneie o QR code no painel.',
+        503
+      );
+    }
+    const ownJid = toMainUserJid(this.sock.user?.id);
+    if (!ownJid) {
+      throw new AppError('Não foi possível identificar a conta WhatsApp conectada.', 503);
+    }
+    try {
+      const url = await this.sock.profilePictureUrl(ownJid, 'image');
+      return url ?? null;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      // Quando não existe foto definida, o Baileys pode responder com erro de recurso ausente.
+      if (/404|not[\s-]?found|no profile picture/i.test(message)) {
+        return null;
+      }
+      this.log.error({ err: message }, 'WhatsApp: falha ao consultar foto de perfil');
+      throw new AppError('Não foi possível consultar a foto de perfil do WhatsApp.', 503);
     }
   }
 

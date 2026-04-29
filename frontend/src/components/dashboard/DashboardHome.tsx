@@ -1,9 +1,11 @@
 import QRCode from 'react-qr-code';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import {
+  fetchWhatsAppProfilePhotoForInstance,
   fetchListeningStatusForInstance,
   fetchHealth,
   logoutWhatsAppForInstance,
+  updateWhatsAppProfilePhotoForInstance,
   fetchWhatsAppQrForInstance,
   fetchWhatsAppStatusForInstance,
   sendCode,
@@ -25,6 +27,9 @@ function formatSyncTime(): string {
     second: '2-digit',
   });
 }
+
+const MAX_PROFILE_PHOTO_BYTES = 2 * 1024 * 1024;
+const ALLOWED_PROFILE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 type DashboardHomeProps = {
   instanceId: string;
@@ -67,6 +72,13 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
   const [sendLoading, setSendLoading] = useState(false);
   const [disconnectLoading, setDisconnectLoading] = useState(false);
   const [qrPayload, setQrPayload] = useState<string | null>(null);
+  const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
+  const [profilePhotoPreviewUrl, setProfilePhotoPreviewUrl] = useState<string | null>(null);
+  const [profilePhotoError, setProfilePhotoError] = useState<string | null>(null);
+  const [profilePhotoSuccess, setProfilePhotoSuccess] = useState<string | null>(null);
+  const [profilePhotoLoading, setProfilePhotoLoading] = useState(false);
+  const [currentProfilePhotoUrl, setCurrentProfilePhotoUrl] = useState<string | null>(null);
+  const [currentPhotoLoading, setCurrentPhotoLoading] = useState(false);
 
   const digitsPhone = phone.replace(/\D/g, '');
   const codeTrimmed = code.trim();
@@ -75,6 +87,16 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
   useEffect(() => {
     setApiBase(getStoredApiBase());
   }, [instanceId]);
+
+  useEffect(() => {
+    if (!profilePhotoFile) {
+      setProfilePhotoPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(profilePhotoFile);
+    setProfilePhotoPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [profilePhotoFile]);
 
   const loadHealth = useCallback(async () => {
     setHealthLoading(true);
@@ -138,6 +160,22 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
     }
   }, [instanceId]);
 
+  const loadCurrentProfilePhoto = useCallback(async () => {
+    if (whatsappReady !== true) {
+      setCurrentProfilePhotoUrl(null);
+      return;
+    }
+    setCurrentPhotoLoading(true);
+    try {
+      const data = await fetchWhatsAppProfilePhotoForInstance(instanceId);
+      setCurrentProfilePhotoUrl(data.url);
+    } catch {
+      setCurrentProfilePhotoUrl(null);
+    } finally {
+      setCurrentPhotoLoading(false);
+    }
+  }, [instanceId, whatsappReady]);
+
   useEffect(() => {
     void loadHealth();
   }, [loadHealth]);
@@ -169,6 +207,10 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
     if (apiOnline !== true) return;
     void loadWhatsAppStatus();
   }, [apiOnline, loadWhatsAppStatus]);
+
+  useEffect(() => {
+    void loadCurrentProfilePhoto();
+  }, [loadCurrentProfilePhoto]);
 
   const loadQr = useCallback(async () => {
     try {
@@ -252,6 +294,47 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
       setListeningError(e instanceof Error ? e.message : 'Falha ao alterar estado do canal');
     } finally {
       setListeningLoading(false);
+    }
+  }
+
+  function handleProfilePhotoSelected(file: File | null) {
+    setProfilePhotoError(null);
+    setProfilePhotoSuccess(null);
+    if (!file) {
+      setProfilePhotoFile(null);
+      return;
+    }
+    if (!ALLOWED_PROFILE_MIME_TYPES.has(file.type)) {
+      setProfilePhotoError('Formato inválido. Use JPG, PNG ou WEBP.');
+      setProfilePhotoFile(null);
+      return;
+    }
+    if (file.size > MAX_PROFILE_PHOTO_BYTES) {
+      setProfilePhotoError('Arquivo muito grande. Máximo permitido: 2MB.');
+      setProfilePhotoFile(null);
+      return;
+    }
+    setProfilePhotoFile(file);
+  }
+
+  async function handleUpdateProfilePhoto() {
+    if (!profilePhotoFile) {
+      setProfilePhotoError('Selecione uma imagem antes de enviar.');
+      return;
+    }
+    setProfilePhotoLoading(true);
+    setProfilePhotoError(null);
+    setProfilePhotoSuccess(null);
+    try {
+      await updateWhatsAppProfilePhotoForInstance(instanceId, profilePhotoFile);
+      setProfilePhotoSuccess('Foto de perfil atualizada com sucesso.');
+      setProfilePhotoFile(null);
+      await loadCurrentProfilePhoto();
+    } catch (err) {
+      const e = err as Error;
+      setProfilePhotoError(e.message || 'Falha ao atualizar foto de perfil.');
+    } finally {
+      setProfilePhotoLoading(false);
     }
   }
 
@@ -605,6 +688,72 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
                 <Icon name="link_off" className="text-sm" />
                 {disconnectLoading ? 'Desconectando…' : 'Desconectar WhatsApp'}
               </button>
+
+              <div className="bg-surface-container-lowest rounded-lg p-4">
+                <p className="text-outline mb-2 text-[10px] font-bold uppercase tracking-wide">Foto de perfil</p>
+                <div className="mb-3 flex items-center gap-3">
+                  {currentProfilePhotoUrl ? (
+                    <img
+                      src={currentProfilePhotoUrl}
+                      alt="Foto atual do WhatsApp"
+                      className="h-14 w-14 rounded-full object-cover ring-1 ring-slate-200"
+                    />
+                  ) : (
+                    <div className="bg-slate-200 text-slate-600 flex h-14 w-14 items-center justify-center rounded-full text-[10px] font-bold">
+                      SEM FOTO
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-slate-700">Foto atual</p>
+                    <p className="text-outline text-[10px]">
+                      {currentPhotoLoading ? 'Carregando…' : currentProfilePhotoUrl ? 'Obtida da sessão Baileys' : 'Nenhuma foto definida'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void loadCurrentProfilePhoto()}
+                    disabled={whatsappReady !== true || currentPhotoLoading}
+                    className="border-outline-variant text-outline ml-auto rounded-md border px-2 py-1 text-[10px] font-bold uppercase disabled:opacity-60"
+                  >
+                    Atualizar
+                  </button>
+                </div>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  disabled={whatsappReady !== true || profilePhotoLoading}
+                  onChange={(e) => handleProfilePhotoSelected(e.target.files?.[0] ?? null)}
+                  className="text-xs file:mr-3 file:rounded-md file:border-0 file:bg-slate-200 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-slate-800 hover:file:bg-slate-300 disabled:opacity-60"
+                />
+                {profilePhotoPreviewUrl && (
+                  <div className="mt-3">
+                    <img
+                      src={profilePhotoPreviewUrl}
+                      alt="Pré-visualização da nova foto de perfil"
+                      className="h-24 w-24 rounded-full object-cover ring-1 ring-slate-200"
+                    />
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void handleUpdateProfilePhoto()}
+                  disabled={whatsappReady !== true || profilePhotoLoading || !profilePhotoFile}
+                  className="bg-primary text-on-primary mt-3 w-full rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wide disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {profilePhotoLoading ? 'Atualizando…' : 'Atualizar foto do WhatsApp'}
+                </button>
+                <p className="text-outline mt-2 text-[10px]">JPG, PNG ou WEBP. Máximo 2MB.</p>
+                {profilePhotoError && (
+                  <p className="mt-2 rounded-lg bg-error/10 px-3 py-2 text-xs text-error" role="alert">
+                    {profilePhotoError}
+                  </p>
+                )}
+                {profilePhotoSuccess && (
+                  <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700" role="status">
+                    {profilePhotoSuccess}
+                  </p>
+                )}
+              </div>
 
               {healthError && (
                 <div className="border-error flex gap-4 rounded-lg border-l-4 bg-error-container/20 p-4">

@@ -5,6 +5,8 @@ export type {
   PairingStartResponse,
   WhatsAppStatusBody,
   WhatsAppQrBody,
+  WhatsAppProfilePhotoUpdateResponse,
+  WhatsAppProfilePhotoBody,
   WhatsAppListeningStatusBody,
   WhatsAppIncomingMessageEvent,
 } from './whatsapp.types';

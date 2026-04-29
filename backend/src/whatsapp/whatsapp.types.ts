@@ -14,6 +14,15 @@
  * - Auth: Bearer
  * - 200: `{ qr: string | null }` — payload bruto para QR; null até o evento `qr` (Baileys)
  *
+ * ## PUT /api/v1/instances/:instanceId/whatsapp/profile-photo
+ * - Auth: Bearer JWT (sessão do painel)
+ * - Content-Type: multipart/form-data (`photo`)
+ * - 200: `{ ok: true }`
+ *
+ * ## GET /api/v1/instances/:instanceId/whatsapp/profile-photo
+ * - Auth: Bearer JWT (sessão do painel)
+ * - 200: `{ url: string | null }`
+ *
  * ## POST /api/v1/auth/instances/:instanceId/send-code
  * - Auth: Bearer
  * - Body: `{ phoneNumber, message }` (validação zod existente)
@@ -33,6 +42,14 @@ export type WhatsAppStatusBody = {
 
 export type WhatsAppQrBody = {
   qr: string | null;
+};
+
+export type WhatsAppProfilePhotoUpdateResponse = {
+  ok: true;
+};
+
+export type WhatsAppProfilePhotoBody = {
+  url: string | null;
 };
 
 export type WhatsAppListeningStatusBody = {
@@ -56,6 +73,13 @@ export interface IWhatsAppSessionService {
   getQr(userId: string, instanceId: string): string | null;
   isReady(userId: string, instanceId: string): boolean;
   isPairingPending(userId: string, instanceId: string): boolean;
+  updateProfilePhoto(
+    userId: string,
+    instanceId: string,
+    imageBuffer: Buffer,
+    mimeType: string
+  ): Promise<void>;
+  getProfilePhotoUrl(userId: string, instanceId: string): Promise<string | null>;
   /** Cota (plano grátis) e registo de sucesso em histórico aplicam-se aqui. */
   sendOtp(userId: string, instanceId: string, phoneNumber: string, code: string): Promise<void>;
   destroySession(userId: string, instanceId: string): Promise<void>;

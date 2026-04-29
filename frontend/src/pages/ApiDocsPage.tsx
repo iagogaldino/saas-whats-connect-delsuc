@@ -121,7 +121,11 @@ Content-Type: application/json
 # Endpoints WhatsApp (pareamento; detalhes na secção Pareamento por QR)
 POST ${base}/api/v1/instances/<instanceId>/whatsapp/pairing/start
 GET  ${base}/api/v1/instances/<instanceId>/whatsapp/status
-GET  ${base}/api/v1/instances/<instanceId>/whatsapp/qr`}</CodeBlock>
+GET  ${base}/api/v1/instances/<instanceId>/whatsapp/qr
+
+# Atualizar foto de perfil (JWT apenas, multipart)
+PUT  ${base}/api/v1/instances/<instanceId>/whatsapp/profile-photo
+Content-Type: multipart/form-data (campo: photo)`}</CodeBlock>
         </Section>
 
         <Section id="pairing-qr" title="Pareamento por QR (REST)">
@@ -149,6 +153,12 @@ GET  ${base}/api/v1/instances/<instanceId>/whatsapp/qr`}</CodeBlock>
             <code className="font-mono text-xs">&#123; &quot;qr&quot;: string | null &#125;</code> — a string é o
             conteúdo bruto do QR; no cliente, gere a imagem com uma biblioteca de QR (não é URL nem PNG da API). Para
             desconectar: <code className="font-mono text-xs">POST …/whatsapp/logout</code> (também com Bearer).
+          </p>
+          <p>
+            Para trocar a foto da conta conectada, use{' '}
+            <code className="font-mono text-xs">PUT …/whatsapp/profile-photo</code> com token de sessão (JWT) e upload{' '}
+            <code className="font-mono text-xs">multipart/form-data</code> no campo{' '}
+            <code className="font-mono text-xs">photo</code> (JPG/PNG/WEBP até 2MB).
           </p>
           <CodeBlock>{`# Exemplo: iniciar e acompanhar (ajuste <instanceId> e o token)
 export API_BASE='${base}'

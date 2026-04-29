@@ -19,6 +19,14 @@ export type WhatsAppLogoutResponse = {
   ok: boolean;
 };
 
+export type WhatsAppProfilePhotoUpdateResponse = {
+  ok: true;
+};
+
+export type WhatsAppProfilePhotoResponse = {
+  url: string | null;
+};
+
 export type QrResponse = {
   qr: string | null;
 };
@@ -444,6 +452,50 @@ export async function logoutWhatsAppForInstance(instanceId: string): Promise<Wha
     throw e;
   }
   return data as WhatsAppLogoutResponse;
+}
+
+export async function updateWhatsAppProfilePhotoForInstance(
+  instanceId: string,
+  photo: File
+): Promise<WhatsAppProfilePhotoUpdateResponse> {
+  const form = new FormData();
+  form.append('photo', photo);
+  const res = await fetch(apiUrl(`/api/v1/instances/${encodeURIComponent(instanceId)}/whatsapp/profile-photo`), {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: form,
+  });
+  redirectLoginIfUnauthorized(res);
+  const data = (await res.json().catch(() => ({}))) as WhatsAppProfilePhotoUpdateResponse | ApiErrorBody;
+  if (!res.ok) {
+    const err = data as ApiErrorBody;
+    const msg = err.error ?? `Erro HTTP ${res.status}`;
+    const e = new Error(msg) as Error & { status: number; details?: unknown };
+    e.status = res.status;
+    e.details = err.details;
+    throw e;
+  }
+  return data as WhatsAppProfilePhotoUpdateResponse;
+}
+
+export async function fetchWhatsAppProfilePhotoForInstance(
+  instanceId: string
+): Promise<WhatsAppProfilePhotoResponse> {
+  const res = await fetch(apiUrl(`/api/v1/instances/${encodeURIComponent(instanceId)}/whatsapp/profile-photo`), {
+    headers: authHeaders(),
+    cache: 'no-store',
+  });
+  redirectLoginIfUnauthorized(res);
+  const data = (await res.json().catch(() => ({}))) as WhatsAppProfilePhotoResponse | ApiErrorBody;
+  if (!res.ok) {
+    const err = data as ApiErrorBody;
+    const msg = err.error ?? `Erro HTTP ${res.status}`;
+    const e = new Error(msg) as Error & { status: number; details?: unknown };
+    e.status = res.status;
+    e.details = err.details;
+    throw e;
+  }
+  return data as WhatsAppProfilePhotoResponse;
 }
 
 export async function fetchListeningStatus(): Promise<ListeningStatusResponse> {

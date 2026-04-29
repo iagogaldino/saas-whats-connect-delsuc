@@ -57,6 +57,7 @@ Na primeira vez, escaneie o QR code exibido no terminal com o WhatsApp no celula
 - `POST /api/v1/instances/:instanceId/whatsapp/pairing/start`
 - `GET /api/v1/instances/:instanceId/whatsapp/status`
 - `GET /api/v1/instances/:instanceId/whatsapp/qr`
+- `PUT /api/v1/instances/:instanceId/whatsapp/profile-photo` (JWT + multipart `photo`)
 - `POST /api/v1/instances/:instanceId/whatsapp/logout`
 - `POST /api/v1/auth/instances/:instanceId/send-code`
 - `GET /api/v1/instances/:instanceId/messages`
