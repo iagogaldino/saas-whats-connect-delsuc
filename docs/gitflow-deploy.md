@@ -29,8 +29,8 @@ Gatilhos:
 
 O job faz:
 
-1. Conecta no servidor via SSH.
-2. Executa `git fetch`, `git checkout main`, `git pull --ff-only`.
+1. Executa no runner self-hosted (na sua tailnet/servidor).
+2. Roda `git fetch`, `git checkout main`, `git pull --ff-only` no caminho configurado.
 3. Atualiza o frontend com `docker compose build --pull web` e `docker compose up -d --remove-orphans web`.
 4. Roda `docker compose ps`.
 5. Executa health check HTTP; se falhar, o workflow falha.
@@ -38,17 +38,7 @@ O job faz:
 ## Secrets obrigatorios no GitHub
 
 Configure em **Settings > Secrets and variables > Actions**:
-
-Nota: autenticacao por senha funciona, mas e menos segura que chave SSH. Use apenas se esse for seu padrao operacional.
-
-- `DEPLOY_HOST`: host do servidor (ex.: `penguin.tailf3f802.ts.net`).
-- `DEPLOY_USER`: usuario SSH (ex.: `delsuc-linux`).
-- `DEPLOY_PASSWORD`: senha do usuario de deploy.
 - `DEPLOY_PATH`: caminho absoluto do repositorio no servidor (ex.: `/home/delsuc-linux/WhatsAppConnect`).
-
-Opcional:
-
-- `DEPLOY_PORT`: porta SSH (padrao `22`).
 
 Variavel opcional de ambiente do repositorio:
 
@@ -56,11 +46,28 @@ Variavel opcional de ambiente do repositorio:
 
 ## Checklist de validacao inicial
 
-1. O servidor aceita SSH com usuario e senha.
+1. Existe um GitHub self-hosted runner online no repositorio.
 2. O repositorio existe em `DEPLOY_PATH`.
 3. O Docker e Docker Compose estao instalados no servidor.
 4. O comando `docker compose up -d --build` funciona dentro de `frontend/`.
 5. A URL de health retorna HTTP 200 localmente no servidor.
+
+## Setup rapido do self-hosted runner (Linux)
+
+No GitHub: **Settings > Actions > Runners > New self-hosted runner** e copie os comandos.
+
+No servidor Linux, execute o setup do runner (exemplo):
+
+```bash
+mkdir -p ~/actions-runner && cd ~/actions-runner
+curl -o actions-runner-linux-x64.tar.gz -L https://github.com/actions/runner/releases/latest/download/actions-runner-linux-x64.tar.gz
+tar xzf ./actions-runner-linux-x64.tar.gz
+./config.sh --url https://github.com/iagogaldino/saas-whats-connect-delsuc --token <TOKEN>
+sudo ./svc.sh install
+sudo ./svc.sh start
+```
+
+Depois confirme no GitHub que o runner aparece como **Idle/Online**.
 
 ## Rollback operacional rapido
 
