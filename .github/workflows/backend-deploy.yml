@@ -1,0 +1,43 @@
+name: Backend Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-deploy.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: backend-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy backend to production
+    runs-on: self-hosted
+    timeout-minutes: 20
+    environment: production
+
+    steps:
+      - name: Deploy backend on self-hosted runner
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          BACKEND_HEALTH_URL: ${{ vars.BACKEND_HEALTH_URL }}
+        run: |
+          set -euo pipefail
+          : "${DEPLOY_PATH:?DEPLOY_PATH is required}"
+          HEALTH_URL="${BACKEND_HEALTH_URL:-http://127.0.0.1:3001/health}"
+
+          cd "$DEPLOY_PATH"
+          git fetch --all --prune
+          git checkout main
+          git pull --ff-only origin main
+
+          cd backend
+          docker compose build --pull api
+          docker compose up -d --remove-orphans api
+          docker compose ps
+
+          curl --fail --silent --show-error "$HEALTH_URL" > /dev/null
