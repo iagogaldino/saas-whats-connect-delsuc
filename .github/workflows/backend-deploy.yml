@@ -47,4 +47,15 @@ jobs:
           docker compose up -d --remove-orphans api
           docker compose ps
 
-          curl --fail --silent --show-error "$HEALTH_URL" > /dev/null
+          # Give the API time to finish booting before failing the deploy.
+          for i in {1..20}; do
+            if curl --fail --silent --show-error "$HEALTH_URL" > /dev/null; then
+              echo "Backend health check passed."
+              exit 0
+            fi
+            sleep 3
+          done
+
+          echo "Backend health check failed after retries."
+          docker compose logs --tail=120 api || true
+          exit 1
