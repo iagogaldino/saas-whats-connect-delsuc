@@ -12,6 +12,13 @@ import { Boom } from '@hapi/boom';
 import { AppError } from '../errors/AppError';
 import type { WhatsAppIncomingMessageEvent } from './whatsapp.types';
 
+export type WhatsAppContactChangePartial = {
+  jid: string;
+  name?: string;
+  notify?: string;
+  pushName?: string;
+};
+
 export type WhatsAppUserSessionOptions = {
   userId: string;
   instanceId: string;
@@ -21,6 +28,8 @@ export type WhatsAppUserSessionOptions = {
   connectTimeoutMs: number;
   /** Callback para encaminhar mensagens recebidas ao canal realtime do utilizador. */
   onIncomingMessage?: (payload: WhatsAppIncomingMessageEvent) => void;
+  /** Callback para persistir alterações de contatos vindas dos eventos do Baileys. */
+  onContactsChanged?: (contacts: WhatsAppContactChangePartial[]) => void;
 };
 
 function maskCode(code: string): string {
@@ -102,6 +111,46 @@ export class WhatsAppUserSession {
       this.sock = sock;
 
       sock.ev.on('creds.update', saveCreds);
+
+      const emitContacts = (
+        list: ReadonlyArray<{ id?: string; name?: string; notify?: string; verifiedName?: string }>
+      ): void => {
+        if (!this.options.onContactsChanged) return;
+        const partials: WhatsAppContactChangePartial[] = [];
+        for (const c of list) {
+          if (!c?.id) continue;
+          const partial: WhatsAppContactChangePartial = { jid: c.id };
+          if (typeof c.name === 'string') partial.name = c.name;
+          if (typeof c.notify === 'string') {
+            partial.notify = c.notify;
+            partial.pushName = c.notify;
+          }
+          partials.push(partial);
+        }
+        if (partials.length === 0) return;
+        try {
+          this.options.onContactsChanged(partials);
+        } catch (err) {
+          this.log.warn(
+            { err: err instanceof Error ? err.message : String(err) },
+            'WhatsApp: erro ao processar alteração de contatos'
+          );
+        }
+      };
+
+      sock.ev.on('messaging-history.set', (history) => {
+        const contacts = (history as { contacts?: unknown }).contacts;
+        if (Array.isArray(contacts) && contacts.length > 0) {
+          emitContacts(contacts as Parameters<typeof emitContacts>[0]);
+        }
+      });
+      sock.ev.on('contacts.upsert', (list) => {
+        emitContacts(list as Parameters<typeof emitContacts>[0]);
+      });
+      sock.ev.on('contacts.update', (list) => {
+        emitContacts(list as Parameters<typeof emitContacts>[0]);
+      });
+
       sock.ev.on('messages.upsert', (update) => {
         if (update.type !== 'notify') return;
         for (const msg of update.messages) {

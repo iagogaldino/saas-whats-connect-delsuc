@@ -3,6 +3,7 @@ import type { Logger } from 'pino';
 import { AppError } from '../errors/AppError';
 import type {
   IWhatsAppSessionService,
+  WhatsAppContact,
   WhatsAppSessionServiceBootstrapOptions,
 } from './whatsapp.types';
 import { WhatsAppUserSession } from './whatsappUserSession';
@@ -11,6 +12,10 @@ import { WebhookDispatcher } from '../realtime/webhookDispatcher';
 import { disableWebhookDeliveryForInstance } from '../services/instance.service';
 import { assertFreePlanCanSend } from '../services/billing.service';
 import { recordSend } from '../services/sentMessage.service';
+import {
+  listSavedContactsForUser,
+  upsertContacts,
+} from '../services/whatsappContact.service';
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -49,6 +54,14 @@ export class WhatsAppSessionService implements IWhatsAppSessionService {
       onIncomingMessage: (payload) => {
         this.socketGateway.emitIncomingMessage(userId, instanceId, payload);
         this.webhookDispatcher.deliver(userId, instanceId, payload);
+      },
+      onContactsChanged: (contacts) => {
+        void upsertContacts(userId, instanceId, contacts).catch((err) => {
+          this.log.warn(
+            { err: err instanceof Error ? err.message : String(err), userId, instanceId },
+            'WhatsApp: falha ao gravar contatos'
+          );
+        });
       },
     });
   }
@@ -163,6 +176,10 @@ export class WhatsAppSessionService implements IWhatsAppSessionService {
     await recordSend(userId, instanceId, phoneNumber, 'success', undefined, code).catch(() => {
       /* não re-lança; envio WhatsApp já concluiu */
     });
+  }
+
+  async getSavedContacts(userId: string, instanceId: string): Promise<WhatsAppContact[]> {
+    return listSavedContactsForUser(userId, instanceId);
   }
 
   async destroySession(userId: string, instanceId: string): Promise<void> {

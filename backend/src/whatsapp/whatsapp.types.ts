@@ -23,6 +23,12 @@
  * - Auth: Bearer JWT (sessão do painel)
  * - 200: `{ url: string | null }`
  *
+ * ## GET /api/v1/instances/:instanceId/whatsapp/contacts
+ * - Auth: Bearer (JWT ou API key)
+ * - 200: `{ items: WhatsAppContact[] }` — contatos salvos na agenda do WhatsApp
+ *   sincronizados pela sessão Baileys, ordenados por nome ASC. Lista vazia
+ *   enquanto não houver sincronização.
+ *
  * ## POST /api/v1/auth/instances/:instanceId/send-code
  * - Auth: Bearer
  * - Body: `{ phoneNumber, message }` (validação zod existente)
@@ -57,6 +63,17 @@ export type WhatsAppListeningStatusBody = {
   connectedClients: number;
 };
 
+export type WhatsAppContact = {
+  jid: string;
+  name: string;
+  phone: string;
+  notify?: string;
+};
+
+export type WhatsAppContactsBody = {
+  items: WhatsAppContact[];
+};
+
 export type WhatsAppIncomingMessageEvent = {
   messageId: string;
   from: string;
@@ -83,6 +100,8 @@ export interface IWhatsAppSessionService {
   /** Cota (plano grátis) e registo de sucesso em histórico aplicam-se aqui. */
   sendOtp(userId: string, instanceId: string, phoneNumber: string, code: string): Promise<void>;
   destroySession(userId: string, instanceId: string): Promise<void>;
+  /** Contatos salvos na agenda do WhatsApp para a instância, lidos do Mongo. */
+  getSavedContacts(userId: string, instanceId: string): Promise<WhatsAppContact[]>;
   getListeningStatus(userId: string, instanceId: string): Promise<WhatsAppListeningStatusBody>;
   setListeningEnabled(
     userId: string,

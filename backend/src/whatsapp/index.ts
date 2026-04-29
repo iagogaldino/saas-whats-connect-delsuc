@@ -9,6 +9,8 @@ export type {
   WhatsAppProfilePhotoBody,
   WhatsAppListeningStatusBody,
   WhatsAppIncomingMessageEvent,
+  WhatsAppContact,
+  WhatsAppContactsBody,
 } from './whatsapp.types';
 export { WhatsAppSessionService } from './whatsappSession.service';
 export { loadWhatsappRuntimeConfig, resolveBaseDataPathAbsolute } from './whatsapp.config';

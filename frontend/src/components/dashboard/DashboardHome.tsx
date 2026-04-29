@@ -470,6 +470,12 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
           >
             Logs
           </Link>
+          <Link
+            to={`/instances/${instanceId}/contacts`}
+            className="border-outline-variant text-outline hover:bg-surface-container-high rounded px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide transition-colors"
+          >
+            Contatos
+          </Link>
           <span className="text-outline text-[10px] font-bold uppercase tracking-widest">
             Last sync: {lastSync}
           </span>

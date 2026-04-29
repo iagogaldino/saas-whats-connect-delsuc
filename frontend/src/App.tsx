@@ -5,6 +5,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { ApiDocsPage } from './pages/ApiDocsPage';
 import { ApiRequestLogsPage } from './pages/ApiRequestLogsPage';
 import { HistoryPage } from './pages/HistoryPage';
+import { InstanceContactsPage } from './pages/InstanceContactsPage';
 import { InstanceDashboardPage } from './pages/InstanceDashboardPage';
 import { InstancesPage } from './pages/InstancesPage';
 import { LandingPage } from './pages/LandingPage';
@@ -49,6 +50,7 @@ export default function App() {
             <Route index element={<InstanceDashboardPage />} />
             <Route path="history" element={<HistoryPage />} />
             <Route path="logs" element={<ApiRequestLogsPage />} />
+            <Route path="contacts" element={<InstanceContactsPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

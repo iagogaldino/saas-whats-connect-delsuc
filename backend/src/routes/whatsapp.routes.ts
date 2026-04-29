@@ -63,6 +63,17 @@ export function createWhatsAppRouter(
     res.json({ qr: manager.getQr(userId, instanceId) });
   });
 
+  router.get('/contacts', async (req, res, next) => {
+    try {
+      const userId = req.user!.id;
+      const instanceId = req.instance!.id;
+      const items = await manager.getSavedContacts(userId, instanceId);
+      res.json({ items });
+    } catch (e) {
+      next(e);
+    }
+  });
+
   router.post('/logout', async (req, res, next) => {
     try {
       const userId = req.user!.id;
