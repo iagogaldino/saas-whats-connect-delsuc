@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { Router } from 'express';
+import multer, { MulterError } from 'multer';
 import { AppError } from '../errors/AppError';
 import { requireAuth } from '../middleware/requireAuth';
 import { requireJwt } from '../middleware/requireJwt';
@@ -27,6 +28,7 @@ import { createApiKeyBodySchema } from '../validation/apiKey.schema';
 import { credentialsBodySchema } from '../validation/credentials.schema';
 import { forgotPasswordBodySchema, resetPasswordBodySchema } from '../validation/passwordReset.schema';
 import { sendCodeBodySchema } from '../validation/sendCode.schema';
+import { sendMediaBodySchema } from '../validation/sendMedia.schema';
 import { z } from 'zod';
 import { mercadopagoCardPaymentRequestSchema } from '../validation/mercadopagoCardPayment.schema';
 import {
@@ -41,6 +43,11 @@ const logsQuerySchema = z.object({
 
 export function createAuthRouter(whatsappSessions: IWhatsAppSessionService): Router {
   const router = Router();
+  const maxMediaBytes = 16 * 1024 * 1024;
+  const uploadMedia = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: maxMediaBytes, files: 1 },
+  }).single('file');
 
   router.post('/register', async (req, res, next) => {
     try {
@@ -305,6 +312,59 @@ export function createAuthRouter(whatsappSessions: IWhatsAppSessionService): Rou
     } catch (e) {
       next(e);
     }
+  });
+
+  router.post('/instances/:instanceId/send-media', requireAuth, requireInstanceAccess, (req, res, next) => {
+    uploadMedia(req, res, async (uploadErr) => {
+      if (uploadErr) {
+        if (uploadErr instanceof MulterError && uploadErr.code === 'LIMIT_FILE_SIZE') {
+          return next(new AppError('Arquivo muito grande. Máximo permitido: 16MB.', 400));
+        }
+        return next(uploadErr);
+      }
+
+      try {
+        const parsed = sendMediaBodySchema.safeParse(req.body ?? {});
+        if (!parsed.success) {
+          return next(parsed.error);
+        }
+        if (!req.file?.buffer || !req.file.originalname || !req.file.mimetype) {
+          return next(new AppError('Envie o arquivo no campo "file" (multipart/form-data).', 400));
+        }
+        if (req.file.size <= 0) {
+          return next(new AppError('O arquivo enviado está vazio.', 400));
+        }
+
+        const { phoneNumber, caption } = parsed.data;
+        const userId = req.user!.id;
+        const instanceId = req.instance!.id;
+
+        try {
+          await whatsappSessions.sendMedia(userId, instanceId, {
+            phoneNumber,
+            fileBuffer: req.file.buffer,
+            mimeType: req.file.mimetype,
+            fileName: req.file.originalname,
+            caption,
+          });
+          res.status(200).json({ ok: true, message: 'Arquivo enviado' });
+        } catch (sendErr) {
+          await recordSend(
+            userId,
+            instanceId,
+            phoneNumber,
+            'failed',
+            formatSendError(sendErr),
+            caption?.trim() || `[arquivo] ${req.file.originalname}`
+          ).catch(() => {
+            /* idem */
+          });
+          next(sendErr);
+        }
+      } catch (e) {
+        next(e);
+      }
+    });
   });
 
   router.get(

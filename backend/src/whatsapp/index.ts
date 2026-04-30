@@ -11,6 +11,7 @@ export type {
   WhatsAppIncomingMessageEvent,
   WhatsAppContact,
   WhatsAppContactsBody,
+  WhatsAppMediaSendInput,
 } from './whatsapp.types';
 export { WhatsAppSessionService } from './whatsappSession.service';
 export { loadWhatsappRuntimeConfig, resolveBaseDataPathAbsolute } from './whatsapp.config';

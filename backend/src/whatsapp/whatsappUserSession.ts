@@ -10,7 +10,7 @@ import makeWASocket, {
 import type { WASocket } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import { AppError } from '../errors/AppError';
-import type { WhatsAppIncomingMessageEvent } from './whatsapp.types';
+import type { WhatsAppIncomingMessageEvent, WhatsAppMediaSendInput } from './whatsapp.types';
 
 export type WhatsAppContactChangePartial = {
   jid: string;
@@ -313,6 +313,72 @@ export class WhatsAppUserSession {
       }
       throw new AppError(
         'Serviço WhatsApp indisponível ao enviar a mensagem.',
+        503
+      );
+    }
+  }
+
+  async sendMedia(input: WhatsAppMediaSendInput): Promise<void> {
+    if (!this.ready || !this.sock) {
+      throw new AppError(
+        'Serviço WhatsApp indisponível. Aguarde a conexão ou escaneie o QR code no painel.',
+        503
+      );
+    }
+
+    const digits = digitsOnly(input.phoneNumber);
+    if (digits.length < 8 || digits.length > 15) {
+      throw new AppError('Número inválido ou sem WhatsApp.', 400);
+    }
+    if (!input.fileBuffer || input.fileBuffer.length <= 0) {
+      throw new AppError('Arquivo inválido ou vazio.', 400);
+    }
+
+    const jid = `${digits}@s.whatsapp.net`;
+
+    let registered;
+    try {
+      registered = await this.sock.onWhatsApp(jid);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.log.error({ err: message }, 'WhatsApp: erro ao verificar número para envio de arquivo');
+      throw new AppError(
+        'Serviço WhatsApp indisponível. Tente novamente em instantes.',
+        503
+      );
+    }
+
+    const row = registered?.[0];
+    if (!row || !row.exists) {
+      this.log.warn({ phoneNumber: input.phoneNumber }, 'WhatsApp: número não registrado no WhatsApp');
+      throw new AppError('Número não possui WhatsApp.', 400);
+    }
+
+    const targetJid = row.jid;
+    const caption = input.caption?.trim() || undefined;
+
+    try {
+      await this.sock.sendMessage(targetJid, {
+        document: input.fileBuffer,
+        mimetype: input.mimeType,
+        fileName: input.fileName,
+        caption,
+      });
+      this.log.info(
+        { phoneNumber: input.phoneNumber, fileName: input.fileName, mimeType: input.mimeType },
+        'WhatsApp: arquivo enviado com sucesso'
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.log.error(
+        { err: message, phoneNumber: input.phoneNumber, fileName: input.fileName },
+        'WhatsApp: falha ao enviar arquivo'
+      );
+      if (this.looksLikeInvalidNumberError(message)) {
+        throw new AppError('Número inválido para envio no WhatsApp.', 400);
+      }
+      throw new AppError(
+        'Serviço WhatsApp indisponível ao enviar o arquivo.',
         503
       );
     }

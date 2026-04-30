@@ -59,6 +59,12 @@ export type SendCodeBody = {
   message: string;
 };
 
+export type SendMediaBody = {
+  phoneNumber: string;
+  file: File;
+  caption?: string;
+};
+
 export type ApiErrorBody = {
   error: string;
   details?: unknown;
@@ -677,6 +683,39 @@ export async function sendCode(
     method: 'POST',
     headers: authHeaders(true),
     body: JSON.stringify(body),
+  });
+  redirectLoginIfUnauthorized(res);
+  const data = (await res.json().catch(() => ({}))) as
+    | ApiErrorBody
+    | { ok?: boolean; message?: string };
+
+  if (!res.ok) {
+    const err = data as ApiErrorBody;
+    const msg = err.error ?? `Erro HTTP ${res.status}`;
+    const e = new Error(msg) as Error & { status: number; details?: unknown };
+    e.status = res.status;
+    e.details = err.details;
+    throw e;
+  }
+
+  return data as { ok: boolean; message?: string };
+}
+
+export async function sendMedia(
+  instanceId: string,
+  body: SendMediaBody
+): Promise<{ ok: boolean; message?: string }> {
+  const form = new FormData();
+  form.append('phoneNumber', body.phoneNumber);
+  form.append('file', body.file);
+  if (body.caption?.trim()) {
+    form.append('caption', body.caption.trim());
+  }
+
+  const res = await fetch(apiUrl(`/api/v1/auth/instances/${encodeURIComponent(instanceId)}/send-media`), {
+    method: 'POST',
+    headers: authHeaders(),
+    body: form,
   });
   redirectLoginIfUnauthorized(res);
   const data = (await res.json().catch(() => ({}))) as

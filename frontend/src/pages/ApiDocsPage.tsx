@@ -100,6 +100,11 @@ export function ApiDocsPage() {
                 </a>
               </li>
               <li>
+                <a href="#send-media" className="text-primary hover:underline">
+                  Envio de arquivo
+                </a>
+              </li>
+              <li>
                 <a href="#incoming-payload" className="text-primary hover:underline">
                   Payload: mensagem recebida
                 </a>
@@ -376,6 +381,35 @@ Content-Type: application/json
             Para testar upgrade sem gateway, o endpoint{' '}
             <code className="font-mono">POST /api/v1/auth/billing/mock-checkout</code> (sessão JWT) promove
             o plano a pago; em produção use o fluxo de pagamento real.
+          </p>
+        </Section>
+
+        <Section id="send-media" title="Envio de arquivo">
+          <p>
+            Endpoint para envio de arquivo/documento por instância:
+            <code className="font-mono text-xs"> POST /api/v1/auth/instances/:instanceId/send-media</code>.
+          </p>
+          <p>
+            Content-Type obrigatório: <code className="font-mono text-xs">multipart/form-data</code>. Campos esperados:
+            <code className="font-mono text-xs"> phoneNumber</code> (10 a 15 dígitos),
+            <code className="font-mono text-xs"> file</code> (arquivo obrigatório) e
+            <code className="font-mono text-xs"> caption</code> opcional (até 200 caracteres).
+          </p>
+          <p className="text-outline text-xs">
+            Limite atual de tamanho: 16MB por arquivo. O envio usa a mesma autenticação Bearer (JWT ou chave
+            <code className="font-mono"> otp_…</code>) e a mesma verificação de sessão conectada.
+          </p>
+          <CodeBlock>{`curl -X POST "${base}/api/v1/auth/instances/<instanceId>/send-media" \\
+  -H "Authorization: Bearer <token>" \\
+  -F "phoneNumber=5511999999999" \\
+  -F "caption=Segue o arquivo solicitado." \\
+  -F "file=@/caminho/para/contrato.pdf"
+
+# Resposta 200:
+# { "ok": true, "message": "Arquivo enviado" }`}</CodeBlock>
+          <p className="text-outline text-xs">
+            400: validação, arquivo ausente/vazio ou número sem WhatsApp. 403: limite diário do plano grátis
+            atingido. 503: sessão não conectada ou indisponível.
           </p>
         </Section>
 

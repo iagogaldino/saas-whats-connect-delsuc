@@ -35,6 +35,13 @@
  * - Body: `{ phoneNumber, message }` (validação zod existente)
  * - 200: `{ ok: true, message: 'Código enviado' }`
  * - Erros via AppError: 400 (número inválido / sem WhatsApp), 503 (sessão não pronta / serviço indisponível)
+ *
+ * ## POST /api/v1/auth/instances/:instanceId/send-media
+ * - Auth: Bearer
+ * - Content-Type: multipart/form-data
+ * - Form-data: `phoneNumber` (10..15 dígitos), `caption` opcional (até 200 chars), `file`
+ * - 200: `{ ok: true, message: 'Arquivo enviado' }`
+ * - Erros via AppError: 400 (validação/arquivo inválido), 503 (sessão não pronta / serviço indisponível)
  */
 
 export type PairingStartResponse = {
@@ -85,6 +92,14 @@ export type WhatsAppIncomingMessageEvent = {
   instanceId: string;
 };
 
+export type WhatsAppMediaSendInput = {
+  phoneNumber: string;
+  fileBuffer: Buffer;
+  mimeType: string;
+  fileName: string;
+  caption?: string;
+};
+
 /** Métodos expostos ao Express (rotas auth + whatsapp). */
 export interface IWhatsAppSessionService {
   startPairing(userId: string, instanceId: string): void;
@@ -100,6 +115,8 @@ export interface IWhatsAppSessionService {
   getProfilePhotoUrl(userId: string, instanceId: string): Promise<string | null>;
   /** Cota (plano grátis) e registo de sucesso em histórico aplicam-se aqui. */
   sendOtp(userId: string, instanceId: string, phoneNumber: string, code: string): Promise<void>;
+  /** Envio de arquivo/documento para um número WhatsApp. */
+  sendMedia(userId: string, instanceId: string, input: WhatsAppMediaSendInput): Promise<void>;
   destroySession(userId: string, instanceId: string): Promise<void>;
   /** Contactos da instância no Mongo; `filter` define se só com nome de agenda ou todos. */
   getSavedContacts(

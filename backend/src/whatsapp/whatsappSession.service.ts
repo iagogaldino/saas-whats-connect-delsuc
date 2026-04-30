@@ -4,6 +4,7 @@ import { AppError } from '../errors/AppError';
 import type {
   IWhatsAppSessionService,
   WhatsAppContact,
+  WhatsAppMediaSendInput,
   WhatsAppSessionServiceBootstrapOptions,
 } from './whatsapp.types';
 import { WhatsAppUserSession } from './whatsappUserSession';
@@ -174,6 +175,22 @@ export class WhatsAppSessionService implements IWhatsAppSessionService {
     await assertFreePlanCanSend(userId);
     await session.sendOtp(phoneNumber, code);
     await recordSend(userId, instanceId, phoneNumber, 'success', undefined, code).catch(() => {
+      /* não re-lança; envio WhatsApp já concluiu */
+    });
+  }
+
+  async sendMedia(userId: string, instanceId: string, input: WhatsAppMediaSendInput): Promise<void> {
+    const session = this.sessions.get(this.sessionKey(userId, instanceId));
+    if (!session) {
+      throw new AppError(
+        'WhatsApp não iniciado. Use o painel para conectar (Gerar QR) antes de enviar arquivos.',
+        503
+      );
+    }
+    await assertFreePlanCanSend(userId);
+    await session.sendMedia(input);
+    const historyMessage = input.caption?.trim() || `[arquivo] ${input.fileName}`;
+    await recordSend(userId, instanceId, input.phoneNumber, 'success', undefined, historyMessage).catch(() => {
       /* não re-lança; envio WhatsApp já concluiu */
     });
   }
