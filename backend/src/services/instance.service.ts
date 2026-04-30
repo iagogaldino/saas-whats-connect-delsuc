@@ -14,6 +14,11 @@ export type WhatsAppInstanceListItem = {
   updatedAt: string;
 };
 
+export type AutoStartInstanceItem = {
+  userId: string;
+  instanceId: string;
+};
+
 function buildCode(): string {
   const suffix = crypto.randomBytes(4).toString('hex');
   return `inst-${suffix}`;
@@ -72,6 +77,39 @@ export async function listInstancesForUser(userId: string): Promise<WhatsAppInst
   const uid = new mongoose.Types.ObjectId(userId);
   const docs = await WhatsAppInstance.find({ userId: uid }).sort({ createdAt: -1 }).lean();
   return docs.map((doc) => toItem(doc));
+}
+
+export async function listAutoStartInstances(): Promise<AutoStartInstanceItem[]> {
+  const docs = await WhatsAppInstance.find({ realtimeListeningEnabled: true })
+    .select({ userId: 1 })
+    .lean();
+
+  return docs.map((doc) => ({
+    userId: doc.userId.toString(),
+    instanceId: doc._id.toString(),
+  }));
+}
+
+export async function markAutoStartAttempt(instanceId: string): Promise<void> {
+  if (!mongoose.Types.ObjectId.isValid(instanceId)) return;
+  await WhatsAppInstance.updateOne(
+    { _id: new mongoose.Types.ObjectId(instanceId) },
+    { $set: { autoStartLastAttemptAt: new Date(), autoStartLastError: '' } }
+  );
+}
+
+export async function markAutoStartError(instanceId: string, message: string): Promise<void> {
+  if (!mongoose.Types.ObjectId.isValid(instanceId)) return;
+  const safeMessage = message.trim().slice(0, 512);
+  await WhatsAppInstance.updateOne(
+    { _id: new mongoose.Types.ObjectId(instanceId) },
+    {
+      $set: {
+        autoStartLastAttemptAt: new Date(),
+        autoStartLastError: safeMessage,
+      },
+    }
+  );
 }
 
 export async function getOwnedInstanceOrThrow(

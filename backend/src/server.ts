@@ -9,6 +9,9 @@ import { SocketGateway } from './realtime/socketGateway';
 import { WebhookDispatcher } from './realtime/webhookDispatcher';
 import {
   getRealtimeListeningEnabled,
+  listAutoStartInstances,
+  markAutoStartAttempt,
+  markAutoStartError,
   setRealtimeListeningEnabled,
 } from './services/instance.service';
 import {
@@ -76,8 +79,62 @@ socketGateway.setSendMessageHandler((userId, instanceId, phoneNumber, text) =>
 
 const app = createApp(log, whatsappSessions, webhookDispatcher);
 
+async function runWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<void>
+): Promise<void> {
+  if (items.length === 0) return;
+  const limit = Math.max(1, concurrency);
+  let index = 0;
+
+  async function consume(): Promise<void> {
+    while (index < items.length) {
+      const current = items[index];
+      index += 1;
+      await worker(current);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => consume()));
+}
+
 async function bootstrap() {
   await connectDatabase(mongoUri, log);
+  const autoStartInstances = await listAutoStartInstances();
+  const autoStartConcurrency = Number(process.env.WHATSAPP_AUTOSTART_CONCURRENCY) || 5;
+  let autoStartScheduled = 0;
+  let autoStartFailed = 0;
+
+  await runWithConcurrency(autoStartInstances, autoStartConcurrency, async (item) => {
+    try {
+      await markAutoStartAttempt(item.instanceId);
+      whatsappSessions.startPairing(item.userId, item.instanceId);
+      autoStartScheduled += 1;
+    } catch (err) {
+      autoStartFailed += 1;
+      const message = err instanceof Error ? err.message : String(err);
+      await markAutoStartError(item.instanceId, message).catch(() => {});
+      log.warn(
+        {
+          err,
+          userId: item.userId,
+          instanceId: item.instanceId,
+        },
+        'WhatsApp auto-start: failed to schedule instance'
+      );
+    }
+  });
+  log.info(
+    {
+      total: autoStartInstances.length,
+      scheduled: autoStartScheduled,
+      failed: autoStartFailed,
+      concurrency: autoStartConcurrency,
+    },
+    'WhatsApp auto-start: bootstrap scheduling finished'
+  );
+
   await drainPremiumActivationBacklog(log);
 
   const planSweep = startPlanExpirationSweep(log);

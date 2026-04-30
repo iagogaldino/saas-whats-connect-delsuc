@@ -42,6 +42,15 @@ const whatsAppInstanceSchema = new mongoose.Schema(
       default: '',
       maxlength: 128,
     },
+    autoStartLastAttemptAt: {
+      type: Date,
+      default: null,
+    },
+    autoStartLastError: {
+      type: String,
+      default: '',
+      maxlength: 512,
+    },
   },
   { timestamps: true }
 );
