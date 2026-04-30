@@ -70,6 +70,11 @@ export function ApiDocsPage() {
             <p className="text-on-surface mb-2 text-xs font-bold uppercase tracking-widest">Nesta página</p>
             <ul className="list-inside list-disc space-y-1.5 text-sm text-slate-600">
               <li>
+                <a href="#auth-jwt" className="text-primary hover:underline">
+                  Autenticação (JWT)
+                </a>
+              </li>
+              <li>
                 <a href="#api-tokens" className="text-primary hover:underline">
                   Tokens de API
                 </a>
@@ -112,6 +117,49 @@ export function ApiDocsPage() {
             </ul>
           </nav>
         </div>
+
+        <Section id="auth-jwt" title="Autenticação (JWT)">
+          <p>
+            Para obter o <strong>JWT de sessão</strong>, use os endpoints de autenticação em{' '}
+            <code className="font-mono text-xs">/api/v1/auth</code>. O token retornado no campo{' '}
+            <code className="font-mono text-xs">token</code> deve ser enviado como{' '}
+            <code className="font-mono text-xs">Authorization: Bearer &lt;jwt&gt;</code>.
+          </p>
+          <CodeBlock>{`# Login (obter JWT de sessão)
+POST ${base}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "usuario@exemplo.com",
+  "password": "Senha@123456"
+}
+
+# Resposta 200:
+# {
+#   "user": {
+#     "id": "<userId>",
+#     "email": "usuario@exemplo.com"
+#   },
+#   "token": "<jwt-de-sessao>"
+# }`}</CodeBlock>
+          <CodeBlock>{`# Registro (também retorna JWT de sessão)
+POST ${base}/api/v1/auth/register
+Content-Type: application/json
+
+{
+  "email": "novo@exemplo.com",
+  "password": "Senha@123456"
+}
+
+# Resposta 201:
+# {
+#   "user": {
+#     "id": "<userId>",
+#     "email": "novo@exemplo.com"
+#   },
+#   "token": "<jwt-de-sessao>"
+# }`}</CodeBlock>
+        </Section>
 
         <Section id="api-tokens" title="Tokens de API">
           <p>
