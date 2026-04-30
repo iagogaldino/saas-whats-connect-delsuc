@@ -70,6 +70,11 @@ export function ApiDocsPage() {
             <p className="text-on-surface mb-2 text-xs font-bold uppercase tracking-widest">Nesta página</p>
             <ul className="list-inside list-disc space-y-1.5 text-sm text-slate-600">
               <li>
+                <a href="#api-tokens" className="text-primary hover:underline">
+                  Tokens de API
+                </a>
+              </li>
+              <li>
                 <a href="#instances" className="text-primary hover:underline">
                   Instâncias e conexão
                 </a>
@@ -107,6 +112,66 @@ export function ApiDocsPage() {
             </ul>
           </nav>
         </div>
+
+        <Section id="api-tokens" title="Tokens de API">
+          <p>
+            Use <strong>JWT de sessão</strong> para administrar os seus tokens e, depois, use o token gerado (
+            <code className="font-mono text-xs">otp_...</code>) como Bearer nas demais rotas da API.
+          </p>
+          <p>
+            Endpoints de gerenciamento de token (somente usuário autenticado):{' '}
+            <code className="font-mono text-xs">POST /api/v1/tokens</code>,{' '}
+            <code className="font-mono text-xs">GET /api/v1/tokens</code> e{' '}
+            <code className="font-mono text-xs">DELETE /api/v1/tokens/:id</code>.
+          </p>
+          <CodeBlock>{`# 1) Criar token (JWT obrigatório)
+POST ${base}/api/v1/tokens
+Authorization: Bearer <jwt-sessao>
+Content-Type: application/json
+
+{
+  "name": "Integracao CRM"
+}
+
+# Resposta 201:
+# {
+#   "id": "<tokenId>",
+#   "name": "Integracao CRM",
+#   "key": "otp_xxxxxxxxxxxx_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+#   "createdAt": "2026-04-30T12:00:00.000Z"
+# }
+
+# 2) Listar tokens do usuário (JWT obrigatório)
+GET ${base}/api/v1/tokens
+Authorization: Bearer <jwt-sessao>
+
+# Resposta 200:
+# {
+#   "items": [
+#     {
+#       "id": "<tokenId>",
+#       "name": "Integracao CRM",
+#       "keyPrefix": "a1b2c3d4e5f6",
+#       "maskedPreview": "otp_a1b2c3d4e5f6...",
+#       "createdAt": "2026-04-30T12:00:00.000Z",
+#       "lastUsedAt": null
+#     }
+#   ]
+# }
+
+# 3) Revogar token (JWT obrigatório)
+DELETE ${base}/api/v1/tokens/<tokenId>
+Authorization: Bearer <jwt-sessao>
+# Resposta 204 (sem corpo)
+
+# 4) Usar o token gerado nas outras rotas
+GET ${base}/api/v1/instances
+Authorization: Bearer <otp_...>`}</CodeBlock>
+          <p className="text-outline text-xs">
+            Atenção: o valor completo do token (<code className="font-mono text-xs">key</code>) é retornado apenas na criação.
+            Guarde esse valor em local seguro.
+          </p>
+        </Section>
 
         <Section id="instances" title="Instâncias e conexão">
           <p>

@@ -7,6 +7,7 @@ import { createAuthRouter } from './routes/auth.routes';
 import { createMercadoPagoWebhookRouter } from './routes/mercadopago.webhook.routes';
 import { createInstancesRouter } from './routes/instances.routes';
 import { createMessagesRouter } from './routes/messages.routes';
+import { createTokensRouter } from './routes/tokens.routes';
 import { createWhatsAppRouter } from './routes/whatsapp.routes';
 import type { WebhookDispatcher } from './realtime/webhookDispatcher';
 import type { IWhatsAppSessionService } from './whatsapp';
@@ -42,6 +43,7 @@ export function createApp(
   );
   app.use('/api/v1/instances/:instanceId/messages', createMessagesRouter());
   app.use('/api/v1/auth', createAuthRouter(whatsappSessions));
+  app.use('/api/v1/tokens', createTokensRouter());
   app.use('/api/v1/payments/mercadopago', createMercadoPagoWebhookRouter(log));
 
   app.use(errorHandler(log));
