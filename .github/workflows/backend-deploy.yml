@@ -1,116 +1,101 @@
-name: Backend Deploy
-
-on:
-  push:
-    branches:
-      - main
-    paths:
-      - "backend/**"
-      - ".github/workflows/backend-deploy.yml"
-  workflow_dispatch:
-
-concurrency:
-  group: backend-production-deploy
-  cancel-in-progress: false
-
-jobs:
-  deploy:
-    name: Deploy backend to production
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    environment: production
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install cloudflared on runner
-        run: |
-          set -euo pipefail
-          sudo curl -fsSL --output /usr/local/bin/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
-          sudo chmod +x /usr/local/bin/cloudflared
-          /usr/local/bin/cloudflared --version
-
-      - name: SSH deploy on target host
-        env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_USER: ${{ secrets.SSH_USER }}
-          SSH_KEY: ${{ secrets.SSH_KEY }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-          BACKEND_HEALTH_URL: "http://localhost:3001/health"
-          # CI não pode usar login no browser; o edge exige Service Token + política "Service Auth" na app Access.
-          # Nomes oficiais no cloudflared: TUNNEL_SERVICE_TOKEN_ID / TUNNEL_SERVICE_TOKEN_SECRET
-          TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.TUNNEL_SERVICE_TOKEN_ID }}
-          TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.TUNNEL_SERVICE_TOKEN_SECRET }}
-        run: |
-          set -euo pipefail
-
-          : "${SSH_HOST:?SSH_HOST secret is required}"
-          : "${SSH_USER:?SSH_USER secret is required}"
-          : "${SSH_KEY:?SSH_KEY secret is required}"
-          : "${DEPLOY_PATH:?DEPLOY_PATH is required}"
-          : "${TUNNEL_SERVICE_TOKEN_ID:?Crie um Access Service Token e adicione o secret TUNNEL_SERVICE_TOKEN_ID (evita websocket bad handshake no cloudflared)}"
-          : "${TUNNEL_SERVICE_TOKEN_SECRET:?Adicione o secret TUNNEL_SERVICE_TOKEN_SECRET e uma política Service Auth para esse token na aplicação Access do SSH}"
-
-          # Uma linha por valor; evita heredoc e chave fundida em ~/.ssh/config.
-          # User só aceita um token: secret com "User iago", dois nomes ou comentário gera "extra arguments".
-          SSH_HOST="$(printf '%s' "$SSH_HOST" | tr -d '\r' | head -n1 | awk '{print $1}')"
-          SSH_USER="$(printf '%s' "$SSH_USER" | tr -d '\r' | head -n1 | awk '{
-            start = 1
-            if (tolower($1) == "user" && NF > 1) start = 2
-            print $start
-          }')"
-          : "${SSH_USER:?SSH_USER ficou vazio após sanitizar (use só o login, ex.: iago)}"
-
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-
-          # ~/.ssh/config só com printf (sem <<EOF): evita fundir script/chave no mesmo arquivo.
-          {
-            printf '%s\n' "Host deploy-chromebook"
-            printf '%s\n' "  HostName ${SSH_HOST}"
-            printf '%s\n' "  User ${SSH_USER}"
-            printf '%s\n' "  IdentityFile ~/.ssh/deploy_key"
-            printf '%s\n' "  IdentitiesOnly yes"
-            printf '%s\n' "  StrictHostKeyChecking no"
-            printf '%s\n' "  ProxyCommand /usr/local/bin/cloudflared access ssh --hostname %h"
-          } > ~/.ssh/config
-          chmod 600 ~/.ssh/config
-
-          ssh deploy-chromebook env DEPLOY_PATH="$DEPLOY_PATH" HEALTH_URL="$BACKEND_HEALTH_URL" bash -s <<'REMOTE'
-
-          set -euo pipefail
-          echo "Conexão estabelecida com o Chromebook"
-
-          cd "$DEPLOY_PATH"
-          git fetch --all --prune
-          git checkout main
-          git pull origin main
-
-          cd backend
-
-          PORT_CONTAINERS="$(docker ps -q --filter publish=3001)"
-          if [ -n "$PORT_CONTAINERS" ]; then
-            docker rm -f $PORT_CONTAINERS
-          fi
-
-          docker compose build --pull api
-          docker compose up -d --remove-orphans api
-
-          echo "Aguardando API..."
-          for i in {1..20}; do
-            if curl --fail --silent "$HEALTH_URL" > /dev/null; then
-              echo "Backend health check passou."
-              docker image prune -f
-              exit 0
-            fi
-            sleep 5
-          done
-
-          echo "Falha no health check."
-          docker compose logs --tail=50 api
-          exit 1
-
-          REMOTE
+name: Backend Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-deploy.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: backend-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy backend to production
+    # Runner na mesma rede que o host de deploy (ex.: LAN). SSH direto — sem cloudflared/Access.
+    runs-on: self-hosted
+    timeout-minutes: 20
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: SSH deploy on target host
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          BACKEND_HEALTH_URL: "http://localhost:3001/health"
+        run: |
+          set -euo pipefail
+
+          : "${SSH_HOST:?SSH_HOST secret is required}"
+          : "${SSH_USER:?SSH_USER secret is required}"
+          : "${SSH_KEY:?SSH_KEY secret is required}"
+          : "${DEPLOY_PATH:?DEPLOY_PATH is required}"
+
+          SSH_HOST="$(printf '%s' "$SSH_HOST" | tr -d '\r' | head -n1 | awk '{print $1}')"
+          SSH_USER="$(printf '%s' "$SSH_USER" | tr -d '\r' | head -n1 | awk '{
+            start = 1
+            if (tolower($1) == "user" && NF > 1) start = 2
+            print $start
+          }')"
+          : "${SSH_USER:?SSH_USER ficou vazio após sanitizar (use só o login, ex.: iago)}"
+
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          {
+            printf '%s\n' "Host deploy-chromebook"
+            printf '%s\n' "  HostName ${SSH_HOST}"
+            printf '%s\n' "  User ${SSH_USER}"
+            printf '%s\n' "  IdentityFile ~/.ssh/deploy_key"
+            printf '%s\n' "  IdentitiesOnly yes"
+            printf '%s\n' "  StrictHostKeyChecking accept-new"
+            printf '%s\n' "  ConnectTimeout 30"
+          } > ~/.ssh/config
+          chmod 600 ~/.ssh/config
+
+          ssh deploy-chromebook env DEPLOY_PATH="$DEPLOY_PATH" HEALTH_URL="$BACKEND_HEALTH_URL" bash -s <<'REMOTE'
+
+          set -euo pipefail
+          echo "Conexão estabelecida com o host de deploy"
+
+          cd "$DEPLOY_PATH"
+          git fetch --all --prune
+          git checkout main
+          git pull origin main
+
+          cd backend
+
+          PORT_CONTAINERS="$(docker ps -q --filter publish=3001)"
+          if [ -n "$PORT_CONTAINERS" ]; then
+            docker rm -f $PORT_CONTAINERS
+          fi
+
+          docker compose build --pull api
+          docker compose up -d --remove-orphans api
+
+          echo "Aguardando API..."
+          for i in {1..20}; do
+            if curl --fail --silent "$HEALTH_URL" > /dev/null; then
+              echo "Backend health check passou."
+              docker image prune -f
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "Falha no health check."
+          docker compose logs --tail=50 api
+          exit 1
+
+          REMOTE
