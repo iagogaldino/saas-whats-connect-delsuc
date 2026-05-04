@@ -38,6 +38,8 @@ jobs:
           SSH_KEY: ${{ secrets.SSH_KEY }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           FRONTEND_HEALTH_URL: ${{ vars.FRONTEND_HEALTH_URL }}
+          TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.TUNNEL_SERVICE_TOKEN_ID }}
+          TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.TUNNEL_SERVICE_TOKEN_SECRET }}
         run: |
           set -euo pipefail
 
@@ -45,6 +47,8 @@ jobs:
           : "${SSH_USER:?SSH_USER secret is required}"
           : "${SSH_KEY:?SSH_KEY secret is required}"
           : "${DEPLOY_PATH:?DEPLOY_PATH is required}"
+          : "${TUNNEL_SERVICE_TOKEN_ID:?Crie um Access Service Token e adicione o secret TUNNEL_SERVICE_TOKEN_ID}"
+          : "${TUNNEL_SERVICE_TOKEN_SECRET:?Adicione o secret TUNNEL_SERVICE_TOKEN_SECRET e política Service Auth no Access}"
           HEALTH_URL="${FRONTEND_HEALTH_URL:-http://127.0.0.1:4173/}"
 
           SSH_HOST="$(printf '%s' "$SSH_HOST" | tr -d '\r' | head -n1 | awk '{print $1}')"
