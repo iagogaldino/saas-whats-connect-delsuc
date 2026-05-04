@@ -44,57 +44,43 @@ jobs:
           echo "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
 
-          # Execução remota formatada para evitar erros de opção desconhecida
-          ssh -i ~/.ssh/deploy_key \
-            -o "StrictHostKeyChecking=no" \
-            -o "ProxyCommand=/usr/local/bin/cloudflared access ssh --hostname %h" \
-            "${SSH_USER}@${SSH_HOST}" \
-            env DEPLOY_PATH="$DEPLOY_PATH" HEALTH_URL="$BACKEND_HEALTH_URL" bash -s <<'REMOTE'
+          # Execução remota em uma linha única para evitar erro de 'unknown option'
+          ssh -i ~/.ssh/deploy_key -o "StrictHostKeyChecking=no" -o "ProxyCommand=/usr/local/bin/cloudflared access ssh --hostname %h" "${SSH_USER}@${SSH_HOST}" env DEPLOY_PATH="$DEPLOY_PATH" HEALTH_URL="$BACKEND_HEALTH_URL" bash -s <<'REMOTE'
           
           set -euo pipefail
-          echo "✅ Conectado ao Chromebook. Iniciando deploy..."
+          echo "✅ Conexão estabelecida com o Chromebook!"
 
-          # 1. Atualizar código
-          if [ ! -d "$DEPLOY_PATH" ]; then
-            echo "❌ Erro: DEPLOY_PATH não encontrado no servidor."
-            exit 1
-          fi
-
+          # 1. Atualizar repositório
           cd "$DEPLOY_PATH"
           git fetch --all --prune
           git checkout main
           git pull origin main
 
-          # 2. Preparar ambiente Docker
+          # 2. Deploy Docker
           cd backend
           
-          # Limpeza de containers antigos na porta 3001
+          # Limpeza preventiva (Otimizado para 4GB RAM)
           PORT_CONTAINERS="$(docker ps -q --filter publish=3001)"
           if [ -n "$PORT_CONTAINERS" ]; then
-            echo "Limpando containers antigos..."
             docker rm -f $PORT_CONTAINERS
           fi
 
-          # 3. Build e Up (Otimizado para Celeron N4020 com 4GB RAM)
-          echo "Iniciando Build e Up do Docker..."
+          # Build e Up
           docker compose build --pull api
           docker compose up -d --remove-orphans api
 
-          # 4. Health Check Loop
-          echo "Aguardando inicialização da API em $HEALTH_URL..."
+          # 3. Health Check
+          echo "Aguardando API..."
           for i in {1..20}; do
             if curl --fail --silent "$HEALTH_URL" > /dev/null; then
-              echo "✅ Backend health check passou!"
-              
-              # Limpa imagens antigas para poupar o SSD de 64GB
+              echo "✅ Backend online!"
               docker image prune -f
               exit 0
             fi
-            echo "Tentativa $i/20: API ainda não disponível (aguardando 5s)..."
             sleep 5
           done
 
-          echo "❌ Erro: API não respondeu dentro do tempo esperado."
+          echo "❌ Falha no Health Check."
           docker compose logs --tail=50 api
           exit 1
           
