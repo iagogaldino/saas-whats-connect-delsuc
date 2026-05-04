@@ -39,6 +39,20 @@ jobs:
           GIT_TOKEN="${GIT_READ_TOKEN:-$GITHUB_TOKEN}"
           : "${GIT_TOKEN:?Use github.token ou crie o secret GIT_READ_TOKEN (PAT com scope Contents read no repo)}"
 
+          DEPLOY_PATH="$(printf '%s' "$DEPLOY_PATH" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s:/*$::')"
+
+          if [ ! -d "$DEPLOY_PATH/.git" ]; then
+            mkdir -p "$(dirname "$DEPLOY_PATH")"
+            if [ -e "$DEPLOY_PATH" ] && [ ! -d "$DEPLOY_PATH/.git" ]; then
+              echo "::error::DEPLOY_PATH existe no disco mas não é um repositório git (falta .git). Escolha outro caminho ou apague a pasta e reponha o secret."
+              exit 1
+            fi
+            if [ ! -d "$DEPLOY_PATH" ]; then
+              echo "A clonar em DEPLOY_PATH (primeira execução)..."
+              git clone "https://x-access-token:${GIT_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$DEPLOY_PATH"
+            fi
+          fi
+
           HEALTH_URL="${BACKEND_HEALTH_URL}"
           REMOTE_ORIG="$(cd "$DEPLOY_PATH" && git remote get-url origin)"
           trap 'git -C "$DEPLOY_PATH" remote set-url origin "$REMOTE_ORIG"' EXIT
