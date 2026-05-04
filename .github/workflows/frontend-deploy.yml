@@ -1,5 +1,8 @@
 name: Frontend Deploy
 
+permissions:
+  contents: read
+
 on:
   push:
     branches:
@@ -16,66 +19,38 @@ concurrency:
 jobs:
   deploy:
     name: Deploy frontend to production
-    # Label no runner: ubunto-delsuc
     runs-on: [self-hosted, ubunto-delsuc]
     timeout-minutes: 20
     environment: production
 
     steps:
-      - name: Deploy frontend (local path + SSH key)
+      - name: Deploy frontend (runner local + HTTPS token)
         env:
-          SSH_KEY: ${{ secrets.SSH_KEY }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          GIT_READ_TOKEN: ${{ secrets.GIT_READ_TOKEN }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           FRONTEND_HEALTH_URL: ${{ vars.FRONTEND_HEALTH_URL }}
         run: |
           set -euo pipefail
 
-          : "${SSH_KEY:?Secret SSH_KEY (chave privada OpenSSH) obrigatorio}"
           : "${DEPLOY_PATH:?DEPLOY_PATH secret is required}"
           : "${GITHUB_REPOSITORY:?}"
+          : "${GITHUB_TOKEN:?}"
+
+          GIT_TOKEN="${GIT_READ_TOKEN:-$GITHUB_TOKEN}"
+          : "${GIT_TOKEN:?GIT_READ_TOKEN ou GITHUB_TOKEN em falta}"
 
           DEPLOY_PATH="$(printf '%s' "$DEPLOY_PATH" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s:/*$::')"
           HEALTH_URL="${FRONTEND_HEALTH_URL:-http://127.0.0.1:4173/}"
+          TOKEN_ORIGIN="https://x-access-token:${GIT_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-          KEY="${RUNNER_TEMP:-/tmp}/gha_gitdeploy_key.$$"
-          umask 077
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "$SSH_KEY" | tr -d '\r' >"$KEY"
-          chmod 600 "$KEY"
-
-          if ! grep -qiE '^-----BEGIN .+PRIVATE KEY-----' "$KEY"; then
-            echo "::error::SSH_KEY tem de ser a chave PRIVADA completa (linhas BEGIN/END)."
-            exit 1
+          if [ -d "$DEPLOY_PATH/.git" ]; then
+            REMOTE_RESTORE="$(git -C "$DEPLOY_PATH" remote get-url origin)"
+          else
+            REMOTE_RESTORE="https://github.com/${GITHUB_REPOSITORY}.git"
           fi
-
-          KEY_ABS="$(readlink -f "$KEY" 2>/dev/null || realpath "$KEY" 2>/dev/null || echo "$KEY")"
-
-          touch ~/.ssh/known_hosts
-          if ! ssh-keygen -F github.com -f ~/.ssh/known_hosts >/dev/null 2>&1; then
-            ssh-keyscan -t ed25519,rsa github.com >>~/.ssh/known_hosts 2>/dev/null || true
-          fi
-          chmod 644 ~/.ssh/known_hosts
-
-          SSH_CMD="ssh -F /dev/null -i ${KEY_ABS} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
-          export GIT_SSH_COMMAND="$SSH_CMD"
-
-          git_ssh() {
-            GIT_SSH_COMMAND="$SSH_CMD" git -c core.sshCommand="$SSH_CMD" "$@"
-          }
-
-          echo "A testar autenticacao SSH com git@github.com ..."
-          set +e
-          ssh_test="$(ssh -F /dev/null -i "$KEY_ABS" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o BatchMode=yes -T git@github.com 2>&1)"
-          set -e
-          echo "$ssh_test"
-          if echo "$ssh_test" | grep -qi 'Permission denied (publickey)'; then
-            echo "::error::GitHub rejeitou a chave. Adicione a PUBLICA em Deploy keys do repo ou nas SSH keys da conta."
-            exit 1
-          fi
-
-          ORIGIN_SSH="git@github.com:${GITHUB_REPOSITORY}.git"
+          trap 'git -C "$DEPLOY_PATH" remote set-url origin "$REMOTE_RESTORE" 2>/dev/null || true' EXIT
 
           if [ ! -d "$DEPLOY_PATH/.git" ]; then
             mkdir -p "$(dirname "$DEPLOY_PATH")"
@@ -83,20 +58,16 @@ jobs:
               echo "::error::DEPLOY_PATH existe mas nao e um repositorio git."
               exit 1
             fi
-            if [ ! -d "$DEPLOY_PATH" ]; then
-              echo "Primeira execucao: git clone SSH -> DEPLOY_PATH"
-              git_ssh clone "$ORIGIN_SSH" "$DEPLOY_PATH"
-            fi
+            echo "Primeira execucao: git clone (HTTPS)"
+            git clone "$TOKEN_ORIGIN" "$DEPLOY_PATH"
           fi
 
-          git_ssh -C "$DEPLOY_PATH" remote set-url origin "$ORIGIN_SSH"
+          git -C "$DEPLOY_PATH" remote set-url origin "$TOKEN_ORIGIN"
 
           cd "$DEPLOY_PATH"
-          git_ssh fetch --all --prune
-          git_ssh checkout main
-          git_ssh pull --ff-only origin main
-
-          rm -f "$KEY"
+          git fetch --all --prune
+          git checkout main
+          git pull --ff-only origin main
 
           cd frontend
 
