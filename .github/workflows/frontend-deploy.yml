@@ -1,8 +1,5 @@
 name: Frontend Deploy
 
-permissions:
-  contents: read
-
 on:
   push:
     branches:
@@ -24,43 +21,57 @@ jobs:
     environment: production
 
     steps:
-      - name: Deploy frontend (local repo path)
+      - name: Deploy frontend (local path + SSH key)
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GIT_READ_TOKEN: ${{ secrets.GIT_READ_TOKEN }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
           FRONTEND_HEALTH_URL: ${{ vars.FRONTEND_HEALTH_URL }}
         run: |
           set -euo pipefail
+
+          : "${SSH_KEY:?secret SSH_KEY (chave privada) obrigatorio}"
           : "${DEPLOY_PATH:?DEPLOY_PATH secret is required}"
           : "${GITHUB_REPOSITORY:?}"
-          GIT_TOKEN="${GIT_READ_TOKEN:-$GITHUB_TOKEN}"
-          : "${GIT_TOKEN:?Use github.token ou crie o secret GIT_READ_TOKEN (PAT com scope Contents read no repo)}"
 
           DEPLOY_PATH="$(printf '%s' "$DEPLOY_PATH" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s:/*$::')"
+          HEALTH_URL="${FRONTEND_HEALTH_URL:-http://127.0.0.1:4173/}"
+
+          KEY="${RUNNER_TEMP:-/tmp}/gha_gitdeploy_key.$$"
+          umask 077
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" | tr -d '\r' >"$KEY"
+
+          if ! grep -Fq 'github.com' ~/.ssh/known_hosts 2>/dev/null; then
+            ssh-keyscan -t ed25519,rsa github.com >>~/.ssh/known_hosts 2>/dev/null || true
+          fi
+          chmod 644 ~/.ssh/known_hosts 2>/dev/null || true
+
+          export GIT_SSH_COMMAND="ssh -i $KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+
+          ORIGIN_SSH="git@github.com:${GITHUB_REPOSITORY}.git"
 
           if [ ! -d "$DEPLOY_PATH/.git" ]; then
             mkdir -p "$(dirname "$DEPLOY_PATH")"
             if [ -e "$DEPLOY_PATH" ] && [ ! -d "$DEPLOY_PATH/.git" ]; then
-              echo "::error::DEPLOY_PATH existe no disco mas não é um repositório git (falta .git). Escolha outro caminho ou apague a pasta e reponha o secret."
+              echo "::error::DEPLOY_PATH existe mas não é um repositório git."
               exit 1
             fi
             if [ ! -d "$DEPLOY_PATH" ]; then
-              echo "A clonar em DEPLOY_PATH (primeira execução)..."
-              git clone "https://x-access-token:${GIT_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$DEPLOY_PATH"
+              echo "Primeira execução: git clone SSH -> $DEPLOY_PATH"
+              git clone "$ORIGIN_SSH" "$DEPLOY_PATH"
             fi
           fi
 
-          HEALTH_URL="${FRONTEND_HEALTH_URL:-http://127.0.0.1:4173/}"
-          REMOTE_ORIG="$(cd "$DEPLOY_PATH" && git remote get-url origin)"
-          trap 'git -C "$DEPLOY_PATH" remote set-url origin "$REMOTE_ORIG"' EXIT
-          git -C "$DEPLOY_PATH" remote set-url origin "https://x-access-token:${GIT_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git -C "$DEPLOY_PATH" remote set-url origin "$ORIGIN_SSH"
 
           cd "$DEPLOY_PATH"
           git fetch --all --prune
           git checkout main
           git pull --ff-only origin main
+
+          rm -f "$KEY"
 
           cd frontend
 
@@ -69,7 +80,7 @@ jobs:
           docker compose ps
 
           echo "Health check frontend..."
-          if curl --fail --silent "$HEALTH_URL" > /dev/null; then
+          if curl --fail --silent "$HEALTH_URL" >/dev/null; then
             echo "Frontend health check passou."
             docker image prune -f
             exit 0
