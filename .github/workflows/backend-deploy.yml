@@ -24,66 +24,59 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install Cloudflared on Runner
+        run: |
+          sudo curl -L --output /usr/local/bin/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+          sudo chmod +x /usr/local/bin/cloudflared
+
       - name: SSH deploy on target host
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_KEY: ${{ secrets.SSH_KEY }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-          # Ajuste a URL de Health Check conforme seu ambiente (Gymfyfit ou SAAS Brasil)
           BACKEND_HEALTH_URL: "http://localhost:3001/health"
         run: |
           set -euo pipefail
           
-          # Validação de Secrets
-          : "${SSH_HOST:?SSH_HOST secret is required}"
-          : "${SSH_USER:?SSH_USER secret is required}"
-          : "${SSH_KEY:?SSH_KEY secret is required}"
-          : "${DEPLOY_PATH:?DEPLOY_PATH is required}"
-
-          # Configuração temporária da chave SSH para a sessão
+          # Configuração da chave SSH
           mkdir -p ~/.ssh
           echo "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
 
-          # Execução remota via Túnel Cloudflare
+          # O ProxyCommand é o segredo para atravessar o túnel da Cloudflare
           ssh -i ~/.ssh/deploy_key \
             -o StrictHostKeyChecking=no \
-            -o ConnectTimeout=30 \
+            -o ProxyCommand="/usr/local/bin/cloudflared access ssh --hostname %h" \
             "${SSH_USER}@${SSH_HOST}" \
             env DEPLOY_PATH="$DEPLOY_PATH" HEALTH_URL="$BACKEND_HEALTH_URL" \
             bash -s <<'REMOTE'
           
           set -euo pipefail
-          echo "Iniciando deploy em: $DEPLOY_PATH"
+          echo "Conectado ao Chromebook. Iniciando deploy..."
 
-          # 1. Atualizar repositório local
           cd "$DEPLOY_PATH"
           git fetch --all --prune
           git checkout main
           git pull origin main
 
-          # 2. Preparar ambiente Docker
           cd backend
           
-          # Limpeza de containers antigos na porta 3001
+          # Remove containers na porta 3001
           PORT_CONTAINERS="$(docker ps -q --filter publish=3001)"
           if [ -n "$PORT_CONTAINERS" ]; then
             docker rm -f $PORT_CONTAINERS
           fi
 
-          # 3. Build e Up (Otimizado para o Celeron N4020)
-          # --pull garante que imagens base sejam atualizadas
+          # Build e Up (Otimizado para 4GB RAM)
           docker compose build --pull api
           docker compose up -d --remove-orphans api
 
-          # 4. Health Check Loop
+          # Health Check
           echo "Aguardando inicialização da API..."
           for i in {1..20}; do
             if curl --fail --silent "$HEALTH_URL" > /dev/null; then
               echo "✅ Backend health check passou!"
-              
-              # Limpeza de imagens órfãs para poupar o SSD de 64GB
               docker image prune -f
               exit 0
             fi
@@ -91,7 +84,7 @@ jobs:
             sleep 5
           done
 
-          echo "❌ Backend health check falhou após 100 segundos."
+          echo "❌ Erro: API não respondeu."
           docker compose logs --tail=50 api
           exit 1
           
