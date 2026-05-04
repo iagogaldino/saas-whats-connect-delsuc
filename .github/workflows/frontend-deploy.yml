@@ -26,12 +26,13 @@ jobs:
     steps:
       - name: Deploy frontend (local repo path)
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           FRONTEND_HEALTH_URL: ${{ vars.FRONTEND_HEALTH_URL }}
         run: |
           set -euo pipefail
           : "${DEPLOY_PATH:?DEPLOY_PATH secret is required}"
-          : "${GITHUB_TOKEN:?}"
+          : "${GITHUB_TOKEN:?GITHUB_TOKEN indisponível; verifique permissões do workflow}"
 
           HEALTH_URL="${FRONTEND_HEALTH_URL:-http://127.0.0.1:4173/}"
           REMOTE_ORIG="$(cd "$DEPLOY_PATH" && git remote get-url origin)"
