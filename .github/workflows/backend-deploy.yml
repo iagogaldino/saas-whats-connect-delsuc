@@ -1,101 +1,117 @@
-name: Backend Deploy
-
-on:
-  push:
-    branches:
-      - main
-    paths:
-      - "backend/**"
-      - ".github/workflows/backend-deploy.yml"
-  workflow_dispatch:
-
-concurrency:
-  group: backend-production-deploy
-  cancel-in-progress: false
-
-jobs:
-  deploy:
-    name: Deploy backend to production
-    # Runner na mesma rede que o host de deploy (ex.: LAN). SSH direto — sem cloudflared/Access.
-    runs-on: self-hosted
-    timeout-minutes: 20
-    environment: production
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: SSH deploy on target host
-        env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_USER: ${{ secrets.SSH_USER }}
-          SSH_KEY: ${{ secrets.SSH_KEY }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-          BACKEND_HEALTH_URL: "http://localhost:3001/health"
-        run: |
-          set -euo pipefail
-
-          : "${SSH_HOST:?SSH_HOST secret is required}"
-          : "${SSH_USER:?SSH_USER secret is required}"
-          : "${SSH_KEY:?SSH_KEY secret is required}"
-          : "${DEPLOY_PATH:?DEPLOY_PATH is required}"
-
-          SSH_HOST="$(printf '%s' "$SSH_HOST" | tr -d '\r' | head -n1 | awk '{print $1}')"
-          SSH_USER="$(printf '%s' "$SSH_USER" | tr -d '\r' | head -n1 | awk '{
-            start = 1
-            if (tolower($1) == "user" && NF > 1) start = 2
-            print $start
-          }')"
-          : "${SSH_USER:?SSH_USER ficou vazio após sanitizar (use só o login, ex.: iago)}"
-
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-
-          {
-            printf '%s\n' "Host deploy-chromebook"
-            printf '%s\n' "  HostName ${SSH_HOST}"
-            printf '%s\n' "  User ${SSH_USER}"
-            printf '%s\n' "  IdentityFile ~/.ssh/deploy_key"
-            printf '%s\n' "  IdentitiesOnly yes"
-            printf '%s\n' "  StrictHostKeyChecking accept-new"
-            printf '%s\n' "  ConnectTimeout 30"
-          } > ~/.ssh/config
-          chmod 600 ~/.ssh/config
-
-          ssh deploy-chromebook env DEPLOY_PATH="$DEPLOY_PATH" HEALTH_URL="$BACKEND_HEALTH_URL" bash -s <<'REMOTE'
-
-          set -euo pipefail
-          echo "Conexão estabelecida com o host de deploy"
-
-          cd "$DEPLOY_PATH"
-          git fetch --all --prune
-          git checkout main
-          git pull origin main
-
-          cd backend
-
-          PORT_CONTAINERS="$(docker ps -q --filter publish=3001)"
-          if [ -n "$PORT_CONTAINERS" ]; then
-            docker rm -f $PORT_CONTAINERS
-          fi
-
-          docker compose build --pull api
-          docker compose up -d --remove-orphans api
-
-          echo "Aguardando API..."
-          for i in {1..20}; do
-            if curl --fail --silent "$HEALTH_URL" > /dev/null; then
-              echo "Backend health check passou."
-              docker image prune -f
-              exit 0
-            fi
-            sleep 5
-          done
-
-          echo "Falha no health check."
-          docker compose logs --tail=50 api
-          exit 1
-
-          REMOTE
+name: Backend Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-deploy.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: backend-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy backend to production
+    runs-on: self-hosted
+    timeout-minutes: 20
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: SSH deploy on target host
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          BACKEND_HEALTH_URL: "http://localhost:3001/health"
+        run: |
+          set -euo pipefail
+
+          : "${SSH_HOST:?SSH_HOST secret is required}"
+          : "${SSH_USER:?SSH_USER secret is required}"
+          : "${SSH_KEY:?SSH_KEY secret is required}"
+          : "${DEPLOY_PATH:?DEPLOY_PATH is required}"
+
+          SSH_HOST="$(printf '%s' "$SSH_HOST" | tr -d '\r' | head -n1 | awk '{print $1}')"
+          SSH_USER="$(printf '%s' "$SSH_USER" | tr -d '\r' | head -n1 | awk '{
+            start = 1
+            if (tolower($1) == "user" && NF > 1) start = 2
+            print $start
+          }')"
+          : "${SSH_USER:?SSH_USER ficou vazio após sanitizar (use só o login, ex.: iago)}"
+
+          SSH_PORT="${SSH_PORT:-22}"
+          SSH_PORT="$(printf '%s' "$SSH_PORT" | tr -d '\r' | head -n1 | awk '{print $1}')"
+          if ! [[ "$SSH_PORT" =~ ^[0-9]+$ ]] || [ "$SSH_PORT" -lt 1 ] || [ "$SSH_PORT" -gt 65535 ]; then
+            echo "::error::SSH_PORT inválido; omita o secret ou use 1-65535 (padrão 22)."
+            exit 1
+          fi
+
+          echo "Testando TCP até ${SSH_HOST}:${SSH_PORT} a partir do runner..."
+          if ! timeout 8 bash -c "echo >/dev/tcp/${SSH_HOST}/${SSH_PORT}" 2>/dev/null; then
+            echo "::error::Sem rota até ${SSH_HOST}:${SSH_PORT} (timeout/recusado)."
+            echo "::error::No Chromebook: sudo systemctl status ssh | cat; sudo ufw status | cat;"
+            echo "::error::Libere o IP deste runner no firewall ou use o IP LAN correto (não use hostname Cloudflare aqui)."
+            exit 1
+          fi
+
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          {
+            printf '%s\n' "Host deploy-chromebook"
+            printf '%s\n' "  HostName ${SSH_HOST}"
+            printf '%s\n' "  User ${SSH_USER}"
+            printf '%s\n' "  Port ${SSH_PORT}"
+            printf '%s\n' "  IdentityFile ~/.ssh/deploy_key"
+            printf '%s\n' "  IdentitiesOnly yes"
+            printf '%s\n' "  StrictHostKeyChecking accept-new"
+            printf '%s\n' "  ConnectTimeout 30"
+          } > ~/.ssh/config
+          chmod 600 ~/.ssh/config
+
+          ssh deploy-chromebook env DEPLOY_PATH="$DEPLOY_PATH" HEALTH_URL="$BACKEND_HEALTH_URL" bash -s <<'REMOTE'
+
+          set -euo pipefail
+          echo "Conexão estabelecida com o host de deploy"
+
+          cd "$DEPLOY_PATH"
+          git fetch --all --prune
+          git checkout main
+          git pull origin main
+
+          cd backend
+
+          PORT_CONTAINERS="$(docker ps -q --filter publish=3001)"
+          if [ -n "$PORT_CONTAINERS" ]; then
+            docker rm -f $PORT_CONTAINERS
+          fi
+
+          docker compose build --pull api
+          docker compose up -d --remove-orphans api
+
+          echo "Aguardando API..."
+          for i in {1..20}; do
+            if curl --fail --silent "$HEALTH_URL" > /dev/null; then
+              echo "Backend health check passou."
+              docker image prune -f
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "Falha no health check."
+          docker compose logs --tail=50 api
+          exit 1
+
+          REMOTE
