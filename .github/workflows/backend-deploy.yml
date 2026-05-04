@@ -1,5 +1,8 @@
 name: Backend Deploy
 
+permissions:
+  contents: read
+
 on:
   push:
     branches:
@@ -16,79 +19,30 @@ concurrency:
 jobs:
   deploy:
     name: Deploy backend to production
+    # Runner self-hosted no MESMO host onde existe DEPLOY_PATH (sem SSH nem SSH_KEY).
     runs-on: self-hosted
     timeout-minutes: 20
     environment: production
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: SSH deploy on target host
+      - name: Deploy backend (local repo path)
         env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_USER: ${{ secrets.SSH_USER }}
-          SSH_KEY: ${{ secrets.SSH_KEY }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-          SSH_PORT: ${{ secrets.SSH_PORT }}
           BACKEND_HEALTH_URL: "http://localhost:3001/health"
         run: |
           set -euo pipefail
+          : "${DEPLOY_PATH:?DEPLOY_PATH secret is required}"
+          : "${GITHUB_TOKEN:?}"
 
-          : "${SSH_HOST:?SSH_HOST secret is required}"
-          : "${SSH_USER:?SSH_USER secret is required}"
-          : "${SSH_KEY:?SSH_KEY secret is required}"
-          : "${DEPLOY_PATH:?DEPLOY_PATH is required}"
-
-          SSH_HOST="$(printf '%s' "$SSH_HOST" | tr -d '\r' | head -n1 | awk '{print $1}')"
-          SSH_USER="$(printf '%s' "$SSH_USER" | tr -d '\r' | head -n1 | awk '{
-            start = 1
-            if (tolower($1) == "user" && NF > 1) start = 2
-            print $start
-          }')"
-          : "${SSH_USER:?SSH_USER ficou vazio após sanitizar (use só o login, ex.: iago)}"
-
-          SSH_PORT="${SSH_PORT:-22}"
-          SSH_PORT="$(printf '%s' "$SSH_PORT" | tr -d '\r' | head -n1 | awk '{print $1}')"
-          if ! [[ "$SSH_PORT" =~ ^[0-9]+$ ]] || [ "$SSH_PORT" -lt 1 ] || [ "$SSH_PORT" -gt 65535 ]; then
-            echo "::error::SSH_PORT inválido; omita o secret ou use 1-65535 (padrão 22)."
-            exit 1
-          fi
-
-          echo "Testando TCP até ${SSH_HOST}:${SSH_PORT} a partir do runner..."
-          if ! timeout 8 bash -c "echo >/dev/tcp/${SSH_HOST}/${SSH_PORT}" 2>/dev/null; then
-            echo "::error::Sem rota até ${SSH_HOST}:${SSH_PORT} (timeout/recusado)."
-            echo "::error::No Chromebook: sudo systemctl status ssh | cat; sudo ufw status | cat;"
-            echo "::error::Libere o IP deste runner no firewall ou use o IP LAN correto (não use hostname Cloudflare aqui)."
-            exit 1
-          fi
-
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-
-          {
-            printf '%s\n' "Host deploy-chromebook"
-            printf '%s\n' "  HostName ${SSH_HOST}"
-            printf '%s\n' "  User ${SSH_USER}"
-            printf '%s\n' "  Port ${SSH_PORT}"
-            printf '%s\n' "  IdentityFile ~/.ssh/deploy_key"
-            printf '%s\n' "  IdentitiesOnly yes"
-            printf '%s\n' "  StrictHostKeyChecking accept-new"
-            printf '%s\n' "  ConnectTimeout 30"
-          } > ~/.ssh/config
-          chmod 600 ~/.ssh/config
-
-          ssh deploy-chromebook env DEPLOY_PATH="$DEPLOY_PATH" HEALTH_URL="$BACKEND_HEALTH_URL" bash -s <<'REMOTE'
-
-          set -euo pipefail
-          echo "Conexão estabelecida com o host de deploy"
+          HEALTH_URL="${BACKEND_HEALTH_URL}"
+          REMOTE_ORIG="$(cd "$DEPLOY_PATH" && git remote get-url origin)"
+          trap 'git -C "$DEPLOY_PATH" remote set-url origin "$REMOTE_ORIG"' EXIT
+          git -C "$DEPLOY_PATH" remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
           cd "$DEPLOY_PATH"
           git fetch --all --prune
           git checkout main
-          git pull origin main
+          git pull --ff-only origin main
 
           cd backend
 
@@ -113,5 +67,3 @@ jobs:
           echo "Falha no health check."
           docker compose logs --tail=50 api
           exit 1
-
-          REMOTE
