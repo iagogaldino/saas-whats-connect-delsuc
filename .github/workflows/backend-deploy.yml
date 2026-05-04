@@ -24,63 +24,27 @@ jobs:
     environment: production
 
     steps:
-      - name: Deploy backend (runner local + HTTPS token)
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Deploy backend (Docker Compose)
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GIT_READ_TOKEN: ${{ secrets.GIT_READ_TOKEN }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-          # Conteúdo multilinha igual a um backend/.env (GitHub: Settings → Secrets → BACKEND_DOTENV).
+          # Multiline content same as backend/.env (Repo → Secrets → BACKEND_DOTENV).
           BACKEND_DOTENV: ${{ secrets.BACKEND_DOTENV }}
           BACKEND_HEALTH_URL: "http://localhost:3001/health"
         run: |
           set -euo pipefail
+          cd "${GITHUB_WORKSPACE}/backend"
 
-          : "${DEPLOY_PATH:?DEPLOY_PATH secret is required}"
-          : "${GITHUB_REPOSITORY:?}"
-          : "${GITHUB_TOKEN:?}"
-
-          GIT_TOKEN="${GIT_READ_TOKEN:-$GITHUB_TOKEN}"
-          : "${GIT_TOKEN:?GIT_READ_TOKEN ou GITHUB_TOKEN em falta}"
-
-          DEPLOY_PATH="$(printf '%s' "$DEPLOY_PATH" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s:/*$::')"
-          TOKEN_ORIGIN="https://x-access-token:${GIT_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-
-          # Restaurar origin no fim (evita gravar token no disco apos o pull).
-          if [ -d "$DEPLOY_PATH/.git" ]; then
-            REMOTE_RESTORE="$(git -C "$DEPLOY_PATH" remote get-url origin)"
-          else
-            REMOTE_RESTORE="https://github.com/${GITHUB_REPOSITORY}.git"
-          fi
-          trap 'git -C "$DEPLOY_PATH" remote set-url origin "$REMOTE_RESTORE" 2>/dev/null || true' EXIT
-
-          if [ ! -d "$DEPLOY_PATH/.git" ]; then
-            mkdir -p "$(dirname "$DEPLOY_PATH")"
-            if [ -e "$DEPLOY_PATH" ] && [ ! -d "$DEPLOY_PATH/.git" ]; then
-              echo "::error::DEPLOY_PATH existe mas nao e um repositorio git."
-              exit 1
-            fi
-            echo "Primeira execucao: git clone (HTTPS)"
-            git clone "$TOKEN_ORIGIN" "$DEPLOY_PATH"
-          fi
-
-          git -C "$DEPLOY_PATH" remote set-url origin "$TOKEN_ORIGIN"
-
-          cd "$DEPLOY_PATH"
-          git fetch --all --prune
-          git checkout main
-          git pull --ff-only origin main
-
-          cd backend
-
-          # docker-compose exige env_file: .env; o ficheiro não vem do git (.gitignore).
+          # Compose requires env_file: .env; file is gitignored.
           if [ -n "${BACKEND_DOTENV:-}" ]; then
             umask 077
             printf '%s\n' "$BACKEND_DOTENV" > .env
             chmod 600 .env
-            echo "::notice::backend/.env escrito a partir do secret BACKEND_DOTENV."
+            echo "::notice::backend/.env criado a partir do secret BACKEND_DOTENV."
           elif [ ! -f .env ]; then
-            echo "::error::backend/.env em falta. Defina o secret BACKEND_DOTENV neste repo (conteudo do teu .env) ou cria backend/.env manualmente no servidor em DEPLOY_PATH."
+            echo "::error::backend/.env em falta: define o secret BACKEND_DOTENV no GitHub."
             exit 1
           fi
 
