@@ -1,11 +1,5 @@
 const STORAGE_KEY = 'whatsapp_otp_api_base';
 
-/**
- * URL da API em produção quando não há VITE_API_BASE_URL no build (ex.: esqueceu o .env.production).
- * Sobrescrita por VITE_API_BASE_URL ou pela Base URL salva no painel (localStorage).
- */
-const DEFAULT_PROD_API_BASE = 'https://saas-whatsapp-api.onrender.com';
-
 /** localhost / 127.0.0.1 salvos no dev não podem ser usados no bundle de produção (Failed to fetch). */
 function isLocalDevHost(url: string): boolean {
   try {
@@ -46,10 +40,7 @@ export function getStoredApiBase(): string {
     return normalizeBase(fromStorage);
   }
   if (fromEnv) return normalizeBase(fromEnv);
-  // Build de produção / preview: sem env, evita /api relativo no localhost:4173.
-  if (import.meta.env.PROD) {
-    return normalizeBase(DEFAULT_PROD_API_BASE);
-  }
+  // Produção sem env nem storage: mesma origem ex. /api/v1 → nginx na frente do domínio.
   return '';
 }
 
@@ -64,8 +55,10 @@ export function apiUrl(path: string): string {
   return `${base}${p}`;
 }
 
-/** Base URL para textos de ajuda (ex.: docs); fallback local quando não há env nem proxy preenchido. */
+/** Base URL para textos de ajuda (ex.: docs); fallback local quando não há env nem mesma origem. */
 export function getApiBaseDisplay(): string {
   const b = getStoredApiBase();
-  return b || 'http://localhost:3001';
+  if (b) return b;
+  if (typeof window !== 'undefined') return window.location.origin;
+  return 'http://localhost:3001';
 }

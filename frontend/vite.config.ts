@@ -9,7 +9,7 @@ export default defineConfig(({ command, mode }) => {
   if (command === 'build') {
     if (!env.VITE_API_BASE_URL?.trim()) {
       console.warn(
-        '\n[whatsapp-frontend] VITE_API_BASE_URL ausente em .env.production — o bundle usará DEFAULT_PROD_API_BASE em src/lib/config.ts.\n'
+        '\n[whatsapp-frontend] VITE_API_BASE_URL ausente — em produção a API será mesma origem (paths relativos /api/...).\nDefina VITE_API_BASE_URL se a API ficar em outro host ou para `vite preview` com backend só em localhost.\n'
       );
     }
   }
