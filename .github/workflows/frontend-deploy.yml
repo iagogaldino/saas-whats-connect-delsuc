@@ -1,43 +1,79 @@
-name: Frontend Deploy
-
-on:
-  push:
-    branches:
-      - main
-    paths:
-      - "frontend/**"
-      - ".github/workflows/frontend-deploy.yml"
-  workflow_dispatch:
-
-concurrency:
-  group: frontend-production-deploy
-  cancel-in-progress: false
-
-jobs:
-  deploy:
-    name: Deploy frontend to production
-    runs-on: self-hosted
-    timeout-minutes: 20
-    environment: production
-
-    steps:
-      - name: Deploy frontend on self-hosted runner
-        env:
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-          FRONTEND_HEALTH_URL: ${{ vars.FRONTEND_HEALTH_URL }}
-        run: |
-          set -euo pipefail
-          : "${DEPLOY_PATH:?DEPLOY_PATH is required}"
-          HEALTH_URL="${FRONTEND_HEALTH_URL:-http://127.0.0.1:4173/}"
-
-          cd "$DEPLOY_PATH"
-          git fetch --all --prune
-          git checkout main
-          git pull --ff-only origin main
-
-          cd frontend
-          docker compose build --pull web
-          docker compose up -d --remove-orphans web
-          docker compose ps
-
-          curl --fail --silent --show-error "$HEALTH_URL" > /dev/null
+name: Frontend Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-deploy.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: frontend-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy frontend to production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: SSH deploy on target host
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          FRONTEND_HEALTH_URL: ${{ vars.FRONTEND_HEALTH_URL }}
+        run: |
+          set -euo pipefail
+
+          : "${SSH_HOST:?SSH_HOST secret is required}"
+          : "${SSH_USER:?SSH_USER secret is required}"
+          : "${SSH_KEY:?SSH_KEY secret is required}"
+          : "${DEPLOY_PATH:?DEPLOY_PATH is required}"
+          HEALTH_URL="${FRONTEND_HEALTH_URL:-http://127.0.0.1:4173/}"
+
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            -o ConnectTimeout=30 \
+            "${SSH_USER}@${SSH_HOST}" \
+            env DEPLOY_PATH="$DEPLOY_PATH" HEALTH_URL="$HEALTH_URL" \
+            bash -s <<'REMOTE'
+
+          set -euo pipefail
+          echo "Iniciando deploy em: $DEPLOY_PATH"
+
+          cd "$DEPLOY_PATH"
+          git fetch --all --prune
+          git checkout main
+          git pull origin main
+
+          cd frontend
+
+          docker compose build --pull web
+          docker compose up -d --remove-orphans web
+          docker compose ps
+
+          echo "Health check frontend..."
+          if curl --fail --silent "$HEALTH_URL" > /dev/null; then
+            echo "✅ Frontend health check passou."
+            docker image prune -f
+            exit 0
+          fi
+
+          echo "❌ Frontend health check falhou."
+          docker compose logs --tail=80 web || true
+          exit 1
+
+          REMOTE

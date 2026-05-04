@@ -16,46 +16,83 @@ concurrency:
 jobs:
   deploy:
     name: Deploy backend to production
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production
 
     steps:
-      - name: Deploy backend on self-hosted runner
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: SSH deploy on target host
         env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-          BACKEND_HEALTH_URL: ${{ vars.BACKEND_HEALTH_URL }}
+          # Ajuste a URL de Health Check conforme seu ambiente (Gymfyfit ou SAAS Brasil)
+          BACKEND_HEALTH_URL: "http://localhost:3001/health"
         run: |
           set -euo pipefail
+          
+          # Validação de Secrets
+          : "${SSH_HOST:?SSH_HOST secret is required}"
+          : "${SSH_USER:?SSH_USER secret is required}"
+          : "${SSH_KEY:?SSH_KEY secret is required}"
           : "${DEPLOY_PATH:?DEPLOY_PATH is required}"
-          HEALTH_URL="${BACKEND_HEALTH_URL:-http://127.0.0.1:3001/health}"
 
+          # Configuração temporária da chave SSH para a sessão
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          # Execução remota via Túnel Cloudflare
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            -o ConnectTimeout=30 \
+            "${SSH_USER}@${SSH_HOST}" \
+            env DEPLOY_PATH="$DEPLOY_PATH" HEALTH_URL="$BACKEND_HEALTH_URL" \
+            bash -s <<'REMOTE'
+          
+          set -euo pipefail
+          echo "Iniciando deploy em: $DEPLOY_PATH"
+
+          # 1. Atualizar repositório local
           cd "$DEPLOY_PATH"
           git fetch --all --prune
           git checkout main
-          git pull --ff-only origin main
+          git pull origin main
 
+          # 2. Preparar ambiente Docker
           cd backend
-          # Cleanup known legacy container name.
-          docker rm -f insta-connect-backend || true
-          # Free backend port by removing any running container publishing 3001.
+          
+          # Limpeza de containers antigos na porta 3001
           PORT_CONTAINERS="$(docker ps -q --filter publish=3001)"
           if [ -n "$PORT_CONTAINERS" ]; then
             docker rm -f $PORT_CONTAINERS
           fi
+
+          # 3. Build e Up (Otimizado para o Celeron N4020)
+          # --pull garante que imagens base sejam atualizadas
           docker compose build --pull api
           docker compose up -d --remove-orphans api
-          docker compose ps
 
-          # Give the API time to finish booting before failing the deploy.
+          # 4. Health Check Loop
+          echo "Aguardando inicialização da API..."
           for i in {1..20}; do
-            if curl --fail --silent --show-error "$HEALTH_URL" > /dev/null; then
-              echo "Backend health check passed."
+            if curl --fail --silent "$HEALTH_URL" > /dev/null; then
+              echo "✅ Backend health check passou!"
+              
+              # Limpeza de imagens órfãs para poupar o SSD de 64GB
+              docker image prune -f
               exit 0
             fi
-            sleep 3
+            echo "Tentativa $i/20: API ainda não disponível..."
+            sleep 5
           done
 
-          echo "Backend health check failed after retries."
-          docker compose logs --tail=120 api || true
+          echo "❌ Backend health check falhou após 100 segundos."
+          docker compose logs --tail=50 api
           exit 1
+          
+          REMOTE
