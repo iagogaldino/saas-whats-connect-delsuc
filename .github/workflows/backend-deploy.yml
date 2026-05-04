@@ -30,6 +30,8 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           GIT_READ_TOKEN: ${{ secrets.GIT_READ_TOKEN }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          # Conteúdo multilinha igual a um backend/.env (GitHub: Settings → Secrets → BACKEND_DOTENV).
+          BACKEND_DOTENV: ${{ secrets.BACKEND_DOTENV }}
           BACKEND_HEALTH_URL: "http://localhost:3001/health"
         run: |
           set -euo pipefail
@@ -70,6 +72,17 @@ jobs:
           git pull --ff-only origin main
 
           cd backend
+
+          # docker-compose exige env_file: .env; o ficheiro não vem do git (.gitignore).
+          if [ -n "${BACKEND_DOTENV:-}" ]; then
+            umask 077
+            printf '%s\n' "$BACKEND_DOTENV" > .env
+            chmod 600 .env
+            echo "::notice::backend/.env escrito a partir do secret BACKEND_DOTENV."
+          elif [ ! -f .env ]; then
+            echo "::error::backend/.env em falta. Defina o secret BACKEND_DOTENV neste repo (conteudo do teu .env) ou cria backend/.env manualmente no servidor em DEPLOY_PATH."
+            exit 1
+          fi
 
           PORT_CONTAINERS="$(docker ps -q --filter publish=3001)"
           if [ -n "$PORT_CONTAINERS" ]; then
