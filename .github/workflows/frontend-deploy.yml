@@ -16,8 +16,8 @@ concurrency:
 jobs:
   deploy:
     name: Deploy frontend to production
-    # Label no runner delsuc-ubunto — ver Settings → Actions → Runners → Labels.
-    runs-on: [self-hosted, delsuc-ubunto]
+    # Label no runner: ubunto-delsuc
+    runs-on: [self-hosted, ubunto-delsuc]
     timeout-minutes: 20
     environment: production
 

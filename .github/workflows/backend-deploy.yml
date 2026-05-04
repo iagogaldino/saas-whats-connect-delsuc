@@ -16,8 +16,8 @@ concurrency:
 jobs:
   deploy:
     name: Deploy backend to production
-    # Requer runner com este label em Settings → Actions → Runners (nome != label; criar label "delsuc-ubunto").
-    runs-on: [self-hosted, delsuc-ubunto]
+    # Requer runner com label "ubunto-delsuc" (Settings → Actions → Runners).
+    runs-on: [self-hosted, ubunto-delsuc]
     timeout-minutes: 20
     environment: production
 
