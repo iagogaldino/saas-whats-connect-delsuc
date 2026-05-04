@@ -47,8 +47,13 @@ jobs:
           : "${DEPLOY_PATH:?DEPLOY_PATH is required}"
           HEALTH_URL="${FRONTEND_HEALTH_URL:-http://127.0.0.1:4173/}"
 
-          SSH_HOST="$(printf '%s' "$SSH_HOST" | tr -d '\r' | head -n1)"
-          SSH_USER="$(printf '%s' "$SSH_USER" | tr -d '\r' | head -n1)"
+          SSH_HOST="$(printf '%s' "$SSH_HOST" | tr -d '\r' | head -n1 | awk '{print $1}')"
+          SSH_USER="$(printf '%s' "$SSH_USER" | tr -d '\r' | head -n1 | awk '{
+            start = 1
+            if (tolower($1) == "user" && NF > 1) start = 2
+            print $start
+          }')"
+          : "${SSH_USER:?SSH_USER ficou vazio após sanitizar (use só o login, ex.: iago)}"
 
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh

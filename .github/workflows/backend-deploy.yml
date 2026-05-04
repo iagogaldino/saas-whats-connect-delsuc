@@ -46,9 +46,15 @@ jobs:
           : "${SSH_KEY:?SSH_KEY secret is required}"
           : "${DEPLOY_PATH:?DEPLOY_PATH is required}"
 
-          # Uma linha por valor; evita heredoc (delimitador EOF/CRLF no runner) e chave fundida em ~/.ssh/config.
-          SSH_HOST="$(printf '%s' "$SSH_HOST" | tr -d '\r' | head -n1)"
-          SSH_USER="$(printf '%s' "$SSH_USER" | tr -d '\r' | head -n1)"
+          # Uma linha por valor; evita heredoc e chave fundida em ~/.ssh/config.
+          # User só aceita um token: secret com "User iago", dois nomes ou comentário gera "extra arguments".
+          SSH_HOST="$(printf '%s' "$SSH_HOST" | tr -d '\r' | head -n1 | awk '{print $1}')"
+          SSH_USER="$(printf '%s' "$SSH_USER" | tr -d '\r' | head -n1 | awk '{
+            start = 1
+            if (tolower($1) == "user" && NF > 1) start = 2
+            print $start
+          }')"
+          : "${SSH_USER:?SSH_USER ficou vazio após sanitizar (use só o login, ex.: iago)}"
 
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
