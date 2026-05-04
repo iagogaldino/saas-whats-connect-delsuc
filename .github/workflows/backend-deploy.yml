@@ -27,19 +27,22 @@ jobs:
     steps:
       - name: Deploy backend (local repo path)
         env:
-          # No runner self-hosted o GITHUB_TOKEN nem sempre vem no ambiente do shell sem isto.
           GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GIT_READ_TOKEN: ${{ secrets.GIT_READ_TOKEN }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           BACKEND_HEALTH_URL: "http://localhost:3001/health"
         run: |
           set -euo pipefail
           : "${DEPLOY_PATH:?DEPLOY_PATH secret is required}"
-          : "${GITHUB_TOKEN:?GITHUB_TOKEN indisponível; verifique permissões do workflow}"
+          : "${GITHUB_REPOSITORY:?}"
+          GIT_TOKEN="${GIT_READ_TOKEN:-$GITHUB_TOKEN}"
+          : "${GIT_TOKEN:?Use github.token ou crie o secret GIT_READ_TOKEN (PAT com scope Contents read no repo)}"
 
           HEALTH_URL="${BACKEND_HEALTH_URL}"
           REMOTE_ORIG="$(cd "$DEPLOY_PATH" && git remote get-url origin)"
           trap 'git -C "$DEPLOY_PATH" remote set-url origin "$REMOTE_ORIG"' EXIT
-          git -C "$DEPLOY_PATH" remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git -C "$DEPLOY_PATH" remote set-url origin "https://x-access-token:${GIT_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
           cd "$DEPLOY_PATH"
           git fetch --all --prune
