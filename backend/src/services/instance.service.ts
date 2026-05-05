@@ -10,6 +10,7 @@ export type WhatsAppInstanceListItem = {
   name: string;
   code: string;
   realtimeListeningEnabled: boolean;
+  messagePersistenceEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -29,6 +30,7 @@ function toItem(doc: {
   name: string;
   code: string;
   realtimeListeningEnabled?: boolean;
+  messagePersistenceEnabled?: boolean;
   createdAt: Date | string;
   updatedAt: Date | string;
 }): WhatsAppInstanceListItem {
@@ -37,6 +39,7 @@ function toItem(doc: {
     name: doc.name,
     code: doc.code,
     realtimeListeningEnabled: Boolean(doc.realtimeListeningEnabled),
+    messagePersistenceEnabled: doc.messagePersistenceEnabled ?? true,
     createdAt:
       doc.createdAt instanceof Date ? doc.createdAt.toISOString() : new Date(doc.createdAt).toISOString(),
     updatedAt:
@@ -158,6 +161,27 @@ export async function setRealtimeListeningEnabled(
   const res = await WhatsAppInstance.updateOne(
     { _id: new mongoose.Types.ObjectId(instanceId), userId: new mongoose.Types.ObjectId(userId) },
     { $set: { realtimeListeningEnabled: enabled } }
+  );
+  return res.matchedCount === 1;
+}
+
+export async function getMessagePersistenceEnabled(
+  userId: string,
+  instanceId: string
+): Promise<boolean> {
+  const doc = await getOwnedInstanceOrThrow(userId, instanceId);
+  return doc.messagePersistenceEnabled;
+}
+
+export async function setMessagePersistenceEnabled(
+  userId: string,
+  instanceId: string,
+  enabled: boolean
+): Promise<boolean> {
+  if (!mongoose.Types.ObjectId.isValid(instanceId)) return false;
+  const res = await WhatsAppInstance.updateOne(
+    { _id: new mongoose.Types.ObjectId(instanceId), userId: new mongoose.Types.ObjectId(userId) },
+    { $set: { messagePersistenceEnabled: enabled } }
   );
   return res.matchedCount === 1;
 }

@@ -7,11 +7,14 @@ import { requireInstanceAccess } from '../middleware/requireInstanceAccess';
 import { AppError } from '../errors/AppError';
 import type { WebhookDispatcher } from '../realtime/webhookDispatcher';
 import {
+  getMessagePersistenceEnabled,
   getWebhookConfigForUser,
   getWebhookDispatchConfig,
   getWebhookNotReadyReasons,
+  setMessagePersistenceEnabled,
   setWebhookConfig,
 } from '../services/instance.service';
+import { getMessageMediaForUser } from '../services/sentMessage.service';
 import { setWebhookBodySchema } from '../validation/webhook.schema';
 import type { IWhatsAppSessionService, WhatsAppIncomingMessageEvent } from '../whatsapp';
 
@@ -22,6 +25,10 @@ const contactsQuerySchema = z.object({
 const conversationMessagesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
   beforeMessageId: z.string().trim().min(1).max(300).optional(),
+});
+
+const messagePersistenceBodySchema = z.object({
+  enabled: z.coerce.boolean(),
 });
 
 function toConversationJid(rawValue: string): string {
@@ -119,6 +126,48 @@ export function createWhatsAppRouter(
         beforeMessageId: parsed.data.beforeMessageId,
       });
       res.json(result);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.get('/messages/:messageId/media', async (req, res, next) => {
+    try {
+      const userId = req.user!.id;
+      const instanceId = req.instance!.id;
+      const media = await getMessageMediaForUser(userId, instanceId, req.params.messageId);
+      res.setHeader('Content-Type', media.mimeType);
+      res.setHeader('Content-Disposition', `inline; filename="${media.fileName}"`);
+      res.status(200).send(media.fileBuffer);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.get('/message-persistence', requireJwt, async (req, res, next) => {
+    try {
+      const userId = req.user!.id;
+      const instanceId = req.instance!.id;
+      const enabled = await getMessagePersistenceEnabled(userId, instanceId);
+      res.json({ enabled });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.put('/message-persistence', requireJwt, async (req, res, next) => {
+    try {
+      const parsed = messagePersistenceBodySchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return next(parsed.error);
+      }
+      const userId = req.user!.id;
+      const instanceId = req.instance!.id;
+      const ok = await setMessagePersistenceEnabled(userId, instanceId, parsed.data.enabled);
+      if (!ok) {
+        return next(new AppError('Instância não encontrada.', 404));
+      }
+      res.json({ enabled: parsed.data.enabled });
     } catch (e) {
       next(e);
     }

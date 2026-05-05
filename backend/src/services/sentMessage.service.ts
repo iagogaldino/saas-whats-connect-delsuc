@@ -1,8 +1,18 @@
 import mongoose from 'mongoose';
+import crypto from 'crypto';
+import { mkdir, readFile, stat, writeFile } from 'fs/promises';
+import path from 'path';
 import { AppError } from '../errors/AppError';
 import { SentMessage } from '../models/SentMessage';
+import type {
+  WhatsAppConversationMessage,
+  WhatsAppConversationMessagesBody,
+  WhatsAppIncomingMessageEvent,
+} from '../whatsapp/whatsapp.types';
 
 const MAX_ERROR_LEN = 500;
+const MAX_MESSAGE_LEN = 500;
+const DEFAULT_MEDIA_DIR = './.message_media';
 
 export type SentMessageListItem = {
   id: string;
@@ -20,10 +30,53 @@ export type ListMessagesResult = {
   limit: number;
 };
 
+export type MessageMediaResult = {
+  fileBuffer: Buffer;
+  mimeType: string;
+  fileName: string;
+};
+
 export function formatSendError(err: unknown): string {
   if (err instanceof AppError) return err.message.slice(0, MAX_ERROR_LEN);
   if (err instanceof Error) return err.message.slice(0, MAX_ERROR_LEN);
   return String(err).slice(0, MAX_ERROR_LEN);
+}
+
+function normalizePhone(phoneOrJid: string): string {
+  const left = phoneOrJid.split('@')[0] || phoneOrJid;
+  return left.replace(/\D/g, '');
+}
+
+function normalizeJid(phoneOrJid: string): string {
+  if (phoneOrJid.includes('@')) {
+    return phoneOrJid.replace('@c.us', '@s.whatsapp.net');
+  }
+  const phone = normalizePhone(phoneOrJid);
+  return `${phone}@s.whatsapp.net`;
+}
+
+function resolveMediaDirAbsolute(): string {
+  const configured = (process.env.MESSAGE_MEDIA_DIR || DEFAULT_MEDIA_DIR).trim();
+  return path.isAbsolute(configured) ? configured : path.resolve(process.cwd(), configured);
+}
+
+async function saveMediaFile(input: {
+  userId: string;
+  instanceId: string;
+  buffer: Buffer;
+  fileName: string;
+}): Promise<{ mediaPath: string; mediaFileName: string; mediaSize: number }> {
+  const safeFileName = input.fileName.replace(/[^\w.\-]/g, '_') || 'media.bin';
+  const mediaId = crypto.randomUUID();
+  const relativePath = path.join(input.userId, input.instanceId, `${mediaId}_${safeFileName}`);
+  const absPath = path.join(resolveMediaDirAbsolute(), relativePath);
+  await mkdir(path.dirname(absPath), { recursive: true });
+  await writeFile(absPath, input.buffer);
+  return {
+    mediaPath: relativePath.replace(/\\/g, '/'),
+    mediaFileName: safeFileName,
+    mediaSize: input.buffer.length,
+  };
 }
 
 export async function recordSend(
@@ -32,7 +85,17 @@ export async function recordSend(
   phoneNumber: string,
   status: 'success' | 'failed',
   errorMessage?: string,
-  message?: string
+  message?: string,
+  opts?: {
+    messageId?: string;
+    type?: 'text' | 'media';
+    messageTimestamp?: Date;
+    media?: {
+      fileBuffer: Buffer;
+      mimeType: string;
+      fileName: string;
+    };
+  }
 ): Promise<void> {
   const payload: {
     userId: mongoose.Types.ObjectId;
@@ -41,17 +104,81 @@ export async function recordSend(
     status: 'success' | 'failed';
     errorMessage?: string;
     message?: string;
+    direction: 'outbound';
+    fromMe: true;
+    type: string;
+    jid: string;
+    messageTimestamp: Date;
+    messageId?: string;
+    mediaPath?: string;
+    mediaMimeType?: string;
+    mediaFileName?: string;
+    mediaSize?: number;
   } = {
     userId: new mongoose.Types.ObjectId(userId),
     instanceId: new mongoose.Types.ObjectId(instanceId),
-    phoneNumber,
+    phoneNumber: normalizePhone(phoneNumber),
+    jid: normalizeJid(phoneNumber),
     status,
+    direction: 'outbound',
+    fromMe: true,
+    type: opts?.type ?? 'text',
+    messageTimestamp: opts?.messageTimestamp ?? new Date(),
   };
   if (errorMessage) {
     payload.errorMessage = errorMessage.slice(0, MAX_ERROR_LEN);
   }
   if (message) {
-    payload.message = message.slice(0, 500);
+    payload.message = message.slice(0, MAX_MESSAGE_LEN);
+  }
+  if (opts?.messageId?.trim()) {
+    payload.messageId = opts.messageId.trim();
+  }
+  if (message && message.startsWith('[arquivo]') && !opts?.type) {
+    payload.type = 'media';
+  }
+  if (opts?.media) {
+    const mediaSaved = await saveMediaFile({
+      userId,
+      instanceId,
+      buffer: opts.media.fileBuffer,
+      fileName: opts.media.fileName,
+    });
+    payload.mediaPath = mediaSaved.mediaPath;
+    payload.mediaFileName = mediaSaved.mediaFileName;
+    payload.mediaSize = mediaSaved.mediaSize;
+    payload.mediaMimeType = opts.media.mimeType;
+  }
+  await SentMessage.create(payload);
+}
+
+export async function recordIncomingMessage(event: WhatsAppIncomingMessageEvent): Promise<void> {
+  const payload: Record<string, unknown> = {
+    userId: new mongoose.Types.ObjectId(event.userId),
+    instanceId: new mongoose.Types.ObjectId(event.instanceId),
+    phoneNumber: normalizePhone(event.from),
+    jid: normalizeJid(event.from),
+    messageId: event.messageId,
+    direction: 'inbound',
+    fromMe: false,
+    type: event.media ? 'media' : 'text',
+    status: 'success',
+    message: event.text?.slice(0, MAX_MESSAGE_LEN) || '',
+    messageTimestamp: new Date(event.timestamp),
+    mediaMimeType: event.media?.mimeType,
+    mediaFileName: event.media?.fileName,
+    mediaSize: event.media?.size,
+  };
+  if (event.media?.fileBuffer && event.media.fileBuffer.length > 0) {
+    const mediaSaved = await saveMediaFile({
+      userId: event.userId,
+      instanceId: event.instanceId,
+      buffer: event.media.fileBuffer,
+      fileName: event.media.fileName || 'incoming.bin',
+    });
+    payload.mediaPath = mediaSaved.mediaPath;
+    payload.mediaFileName = mediaSaved.mediaFileName;
+    payload.mediaSize = mediaSaved.mediaSize;
   }
   await SentMessage.create(payload);
 }
@@ -66,6 +193,7 @@ export async function listForUser(
   const filter = {
     userId: new mongoose.Types.ObjectId(userId),
     instanceId: new mongoose.Types.ObjectId(instanceId),
+    direction: 'outbound',
   };
 
   const [docs, total] = await Promise.all([
@@ -86,6 +214,78 @@ export async function listForUser(
   }));
 
   return { items, total, page, limit };
+}
+
+export async function listConversationForUser(
+  userId: string,
+  instanceId: string,
+  jid: string,
+  opts?: { limit?: number; beforeMessageId?: string }
+): Promise<WhatsAppConversationMessagesBody> {
+  const limit = Math.max(1, Math.min(opts?.limit ?? 20, 100));
+  const filter: Record<string, unknown> = {
+    userId: new mongoose.Types.ObjectId(userId),
+    instanceId: new mongoose.Types.ObjectId(instanceId),
+    jid: normalizeJid(jid),
+  };
+  const docs = await SentMessage.find(filter).sort({ createdAt: -1 }).limit(500).lean();
+  const mapped: WhatsAppConversationMessage[] = docs.map((doc) => ({
+    id: (doc.messageId as string | undefined) ?? doc._id.toString(),
+    jid: (doc.jid as string | undefined) ?? normalizeJid(String(doc.phoneNumber ?? '')),
+    fromMe: Boolean(doc.fromMe ?? doc.direction === 'outbound'),
+    timestamp:
+      doc.messageTimestamp instanceof Date
+        ? doc.messageTimestamp.toISOString()
+        : doc.createdAt instanceof Date
+          ? doc.createdAt.toISOString()
+          : new Date(doc.createdAt).toISOString(),
+    text: (doc.message as string | undefined) ?? '',
+    type: (doc.type as string | undefined) ?? 'text',
+    mediaUrl: doc.mediaPath ? `/api/v1/instances/${instanceId}/whatsapp/messages/${doc._id.toString()}/media` : undefined,
+    mediaMimeType: (doc.mediaMimeType as string | undefined) ?? undefined,
+    mediaFileName: (doc.mediaFileName as string | undefined) ?? undefined,
+    mediaSize: (doc.mediaSize as number | undefined) ?? undefined,
+  }));
+  let items = mapped.slice(0, limit);
+  if (opts?.beforeMessageId) {
+    const idx = mapped.findIndex((m) => m.id === opts.beforeMessageId);
+    items = idx >= 0 ? mapped.slice(idx + 1, idx + 1 + limit) : [];
+  }
+  const nextCursor = items.length > 0 ? items[items.length - 1].id : null;
+  return { items, nextCursor };
+}
+
+export async function getMessageMediaForUser(
+  userId: string,
+  instanceId: string,
+  messageId: string
+): Promise<MessageMediaResult> {
+  if (!mongoose.Types.ObjectId.isValid(messageId)) {
+    throw new AppError('ID de mensagem inválido', 400);
+  }
+  const doc = await SentMessage.findOne({
+    _id: new mongoose.Types.ObjectId(messageId),
+    userId: new mongoose.Types.ObjectId(userId),
+    instanceId: new mongoose.Types.ObjectId(instanceId),
+  })
+    .select({ mediaPath: 1, mediaMimeType: 1, mediaFileName: 1 })
+    .lean();
+  if (!doc?.mediaPath) {
+    throw new AppError('Mídia não encontrada para esta mensagem', 404);
+  }
+
+  const absPath = path.join(resolveMediaDirAbsolute(), String(doc.mediaPath));
+  try {
+    await stat(absPath);
+  } catch {
+    throw new AppError('Arquivo de mídia não encontrado no armazenamento', 404);
+  }
+
+  return {
+    fileBuffer: await readFile(absPath),
+    mimeType: String(doc.mediaMimeType || 'application/octet-stream'),
+    fileName: String(doc.mediaFileName || 'media.bin'),
+  };
 }
 
 /** Início e fim do dia civil em UTC (para limite do plano grátis). */

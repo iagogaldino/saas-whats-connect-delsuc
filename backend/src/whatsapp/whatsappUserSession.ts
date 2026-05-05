@@ -3,6 +3,7 @@ import { rm } from 'fs/promises';
 import { Readable } from 'stream';
 import type { Logger } from 'pino';
 import makeWASocket, {
+  downloadMediaMessage,
   DisconnectReason,
   fetchLatestBaileysVersion,
   proto,
@@ -157,13 +158,14 @@ export class WhatsAppUserSession implements IWhatsAppSessionClient {
         emitContacts(list as Parameters<typeof emitContacts>[0]);
       });
 
-      sock.ev.on('messages.upsert', (update) => {
+      sock.ev.on('messages.upsert', async (update) => {
         if (update.type !== 'notify') return;
         for (const msg of update.messages) {
           if (msg.key.fromMe) continue;
           const remoteJid = msg.key.remoteJid ?? '';
           if (!remoteJid || remoteJid.endsWith('@broadcast')) continue;
 
+          const media = await this.extractIncomingMedia(msg);
           const payload: WhatsAppIncomingMessageEvent = {
             messageId: msg.key.id ?? `msg_${Date.now()}`,
             from: remoteJid,
@@ -175,6 +177,7 @@ export class WhatsAppUserSession implements IWhatsAppSessionClient {
             text: this.extractIncomingText(msg.message),
             userId: this.options.userId,
             instanceId: this.options.instanceId,
+            media,
           };
 
           this.options.onIncomingMessage?.(payload);
@@ -557,6 +560,76 @@ export class WhatsAppUserSession implements IWhatsAppSessionClient {
     if (video && typeof video.caption === 'string') return video.caption;
 
     return '';
+  }
+
+  private async extractIncomingMedia(
+    msg: proto.IWebMessageInfo
+  ): Promise<WhatsAppIncomingMessageEvent['media'] | undefined> {
+    const message = msg.message;
+    if (!message || typeof message !== 'object') return undefined;
+    const m = message as Record<string, unknown>;
+    const image = m.imageMessage as
+      | { mimetype?: unknown; fileName?: unknown; fileLength?: unknown }
+      | undefined;
+    if (image) {
+      const downloaded = await this.tryDownloadIncomingMedia(msg, 'image');
+      return {
+        fileBuffer: downloaded,
+        mimeType: typeof image.mimetype === 'string' ? image.mimetype : undefined,
+        fileName: typeof image.fileName === 'string' ? image.fileName : 'image.jpg',
+        size: typeof image.fileLength === 'number' ? image.fileLength : undefined,
+      };
+    }
+    const video = m.videoMessage as
+      | { mimetype?: unknown; fileName?: unknown; fileLength?: unknown }
+      | undefined;
+    if (video) {
+      const downloaded = await this.tryDownloadIncomingMedia(msg, 'video');
+      return {
+        fileBuffer: downloaded,
+        mimeType: typeof video.mimetype === 'string' ? video.mimetype : undefined,
+        fileName: typeof video.fileName === 'string' ? video.fileName : 'video.mp4',
+        size: typeof video.fileLength === 'number' ? video.fileLength : undefined,
+      };
+    }
+    const document = m.documentMessage as
+      | { mimetype?: unknown; fileName?: unknown; fileLength?: unknown }
+      | undefined;
+    if (document) {
+      const downloaded = await this.tryDownloadIncomingMedia(msg, 'document');
+      return {
+        fileBuffer: downloaded,
+        mimeType: typeof document.mimetype === 'string' ? document.mimetype : undefined,
+        fileName: typeof document.fileName === 'string' ? document.fileName : undefined,
+        size: typeof document.fileLength === 'number' ? document.fileLength : undefined,
+      };
+    }
+    return undefined;
+  }
+
+  private async tryDownloadIncomingMedia(
+    msg: proto.IWebMessageInfo,
+    mediaType: 'image' | 'video' | 'document'
+  ): Promise<Buffer | undefined> {
+    if (!this.sock) return undefined;
+    try {
+      const data = await downloadMediaMessage(msg, 'buffer', {}, {
+        logger: this.log,
+        reuploadRequest: this.sock.updateMediaMessage,
+      });
+      if (!data) return undefined;
+      return Buffer.isBuffer(data) ? data : Buffer.from(data as Uint8Array);
+    } catch (err) {
+      this.log.warn(
+        {
+          err: err instanceof Error ? err.message : String(err),
+          mediaType,
+          messageId: msg.key?.id,
+        },
+        'WhatsApp: não foi possível baixar mídia recebida'
+      );
+      return undefined;
+    }
   }
 
   private getMessageType(message: unknown): string {

@@ -23,7 +23,6 @@ import { requestPasswordReset, resetPasswordWithToken } from '../services/passwo
 import { loginUser, registerUser, toPublicUser } from '../services/userAuth.service';
 import { User } from '../models/User';
 import type { IWhatsAppSessionService } from '../whatsapp';
-import { formatSendError, recordSend } from '../services/sentMessage.service';
 import { createApiKeyBodySchema } from '../validation/apiKey.schema';
 import { credentialsBodySchema } from '../validation/credentials.schema';
 import { forgotPasswordBodySchema, resetPasswordBodySchema } from '../validation/passwordReset.schema';
@@ -300,15 +299,8 @@ export function createAuthRouter(whatsappSessions: IWhatsAppSessionService): Rou
       const userId = req.user!.id;
       const instanceId = req.instance!.id;
 
-      try {
-        await whatsappSessions.sendOtp(userId, instanceId, phoneNumber, message);
-        res.status(200).json({ ok: true, message: 'Código enviado' });
-      } catch (sendErr) {
-        await recordSend(userId, instanceId, phoneNumber, 'failed', formatSendError(sendErr), message).catch(() => {
-          /* idem */
-        });
-        next(sendErr);
-      }
+      await whatsappSessions.sendOtp(userId, instanceId, phoneNumber, message);
+      res.status(200).json({ ok: true, message: 'Código enviado' });
     } catch (e) {
       next(e);
     }
@@ -339,28 +331,14 @@ export function createAuthRouter(whatsappSessions: IWhatsAppSessionService): Rou
         const userId = req.user!.id;
         const instanceId = req.instance!.id;
 
-        try {
-          await whatsappSessions.sendMedia(userId, instanceId, {
-            phoneNumber,
-            fileBuffer: req.file.buffer,
-            mimeType: req.file.mimetype,
-            fileName: req.file.originalname,
-            caption,
-          });
-          res.status(200).json({ ok: true, message: 'Arquivo enviado' });
-        } catch (sendErr) {
-          await recordSend(
-            userId,
-            instanceId,
-            phoneNumber,
-            'failed',
-            formatSendError(sendErr),
-            caption?.trim() || `[arquivo] ${req.file.originalname}`
-          ).catch(() => {
-            /* idem */
-          });
-          next(sendErr);
-        }
+        await whatsappSessions.sendMedia(userId, instanceId, {
+          phoneNumber,
+          fileBuffer: req.file.buffer,
+          mimeType: req.file.mimetype,
+          fileName: req.file.originalname,
+          caption,
+        });
+        res.status(200).json({ ok: true, message: 'Arquivo enviado' });
       } catch (e) {
         next(e);
       }

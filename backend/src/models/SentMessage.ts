@@ -15,6 +15,22 @@ const sentMessageSchema = new mongoose.Schema(
       index: true,
     },
     phoneNumber: { type: String, required: true },
+    jid: { type: String, required: false, index: true },
+    messageId: { type: String, required: false, index: true },
+    direction: {
+      type: String,
+      required: true,
+      enum: ['inbound', 'outbound'],
+      default: 'outbound',
+      index: true,
+    },
+    fromMe: { type: Boolean, required: false, default: false },
+    type: { type: String, required: false, default: 'text' },
+    messageTimestamp: { type: Date, required: false, index: true },
+    mediaPath: { type: String, required: false },
+    mediaMimeType: { type: String, required: false },
+    mediaFileName: { type: String, required: false },
+    mediaSize: { type: Number, required: false },
     status: {
       type: String,
       required: true,
@@ -27,6 +43,7 @@ const sentMessageSchema = new mongoose.Schema(
 );
 
 sentMessageSchema.index({ userId: 1, instanceId: 1, createdAt: -1 });
+sentMessageSchema.index({ userId: 1, instanceId: 1, jid: 1, createdAt: -1 });
 
 export type SentMessageDocument = mongoose.InferSchemaType<typeof sentMessageSchema> & {
   _id: mongoose.Types.ObjectId;

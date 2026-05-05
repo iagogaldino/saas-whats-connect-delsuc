@@ -36,6 +36,10 @@ export type ListeningStatusResponse = {
   connectedClients: number;
 };
 
+export type MessagePersistenceResponse = {
+  enabled: boolean;
+};
+
 export type WebhookConfigResponse = {
   url: string | null;
   enabled: boolean;
@@ -75,6 +79,7 @@ export type WhatsAppInstance = {
   name: string;
   code: string;
   realtimeListeningEnabled: boolean;
+  messagePersistenceEnabled?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -613,6 +618,54 @@ export async function stopListeningMessagesForInstance(
     throw e;
   }
   return data as ListeningStatusResponse;
+}
+
+export async function fetchMessagePersistenceForInstance(
+  instanceId: string
+): Promise<MessagePersistenceResponse> {
+  const res = await fetch(
+    apiUrl(`/api/v1/instances/${encodeURIComponent(instanceId)}/whatsapp/message-persistence`),
+    {
+      headers: authHeaders(),
+      cache: 'no-store',
+    }
+  );
+  redirectLoginIfUnauthorized(res);
+  const data = (await res.json().catch(() => ({}))) as MessagePersistenceResponse | ApiErrorBody;
+  if (!res.ok) {
+    const err = data as ApiErrorBody;
+    const msg = err.error ?? `Erro HTTP ${res.status}`;
+    const e = new Error(msg) as Error & { status: number; details?: unknown };
+    e.status = res.status;
+    e.details = err.details;
+    throw e;
+  }
+  return data as MessagePersistenceResponse;
+}
+
+export async function updateMessagePersistenceForInstance(
+  instanceId: string,
+  enabled: boolean
+): Promise<MessagePersistenceResponse> {
+  const res = await fetch(
+    apiUrl(`/api/v1/instances/${encodeURIComponent(instanceId)}/whatsapp/message-persistence`),
+    {
+      method: 'PUT',
+      headers: authHeaders(true),
+      body: JSON.stringify({ enabled }),
+    }
+  );
+  redirectLoginIfUnauthorized(res);
+  const data = (await res.json().catch(() => ({}))) as MessagePersistenceResponse | ApiErrorBody;
+  if (!res.ok) {
+    const err = data as ApiErrorBody;
+    const msg = err.error ?? `Erro HTTP ${res.status}`;
+    const e = new Error(msg) as Error & { status: number; details?: unknown };
+    e.status = res.status;
+    e.details = err.details;
+    throw e;
+  }
+  return data as MessagePersistenceResponse;
 }
 
 export async function fetchWebhookConfigForInstance(

@@ -97,6 +97,12 @@ export type WhatsAppIncomingMessageEvent = {
   text: string;
   userId: string;
   instanceId: string;
+  media?: {
+    fileBuffer?: Buffer;
+    mimeType?: string;
+    fileName?: string;
+    size?: number;
+  };
 };
 
 export type WhatsAppConversationMessage = {
@@ -106,6 +112,10 @@ export type WhatsAppConversationMessage = {
   timestamp: string;
   text: string;
   type: string;
+  mediaUrl?: string;
+  mediaMimeType?: string;
+  mediaFileName?: string;
+  mediaSize?: number;
 };
 
 export type WhatsAppConversationMessagesBody = {

@@ -2,6 +2,7 @@ import QRCode from 'react-qr-code';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  fetchMessagePersistenceForInstance,
   fetchWhatsAppProfilePhotoForInstance,
   fetchListeningStatusForInstance,
   fetchHealth,
@@ -16,6 +17,7 @@ import {
   fetchWebhookConfigForInstance,
   putWebhookConfigForInstance,
   postWebhookTestForInstance,
+  updateMessagePersistenceForInstance,
 } from '../../lib/api';
 import { validateCode, validatePhone } from '../../lib/validation';
 import { Icon } from './Icon';
@@ -55,6 +57,9 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
   const [listeningClients, setListeningClients] = useState(0);
   const [listeningLoading, setListeningLoading] = useState(false);
   const [listeningError, setListeningError] = useState<string | null>(null);
+  const [messagePersistenceEnabled, setMessagePersistenceEnabled] = useState(true);
+  const [messagePersistenceLoading, setMessagePersistenceLoading] = useState(false);
+  const [messagePersistenceError, setMessagePersistenceError] = useState<string | null>(null);
   const [webhookUrl, setWebhookUrl] = useState('');
   const [webhookEnabled, setWebhookEnabled] = useState(false);
   const [webhookSecretLast4, setWebhookSecretLast4] = useState<string | null>(null);
@@ -155,6 +160,16 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
     }
   }, [instanceId]);
 
+  const loadMessagePersistence = useCallback(async () => {
+    setMessagePersistenceError(null);
+    try {
+      const data = await fetchMessagePersistenceForInstance(instanceId);
+      setMessagePersistenceEnabled(data.enabled);
+    } catch (e) {
+      setMessagePersistenceError(e instanceof Error ? e.message : 'Falha ao carregar persistência');
+    }
+  }, [instanceId]);
+
   const loadCurrentProfilePhoto = useCallback(async () => {
     if (whatsappReady !== true) {
       setCurrentProfilePhotoUrl(null);
@@ -186,6 +201,10 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
   useEffect(() => {
     void loadWebhookConfig();
   }, [loadWebhookConfig]);
+
+  useEffect(() => {
+    void loadMessagePersistence();
+  }, [loadMessagePersistence]);
 
   useEffect(() => {
     const onRefresh = () => {
@@ -289,6 +308,19 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
       setListeningError(e instanceof Error ? e.message : 'Falha ao alterar estado do canal');
     } finally {
       setListeningLoading(false);
+    }
+  }
+
+  async function handleToggleMessagePersistence(enabled: boolean) {
+    setMessagePersistenceLoading(true);
+    setMessagePersistenceError(null);
+    try {
+      const data = await updateMessagePersistenceForInstance(instanceId, enabled);
+      setMessagePersistenceEnabled(data.enabled);
+    } catch (e) {
+      setMessagePersistenceError(e instanceof Error ? e.message : 'Falha ao atualizar persistência');
+    } finally {
+      setMessagePersistenceLoading(false);
     }
   }
 
@@ -927,6 +959,45 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
                 Atualizar
               </button>
             </div>
+          </section>
+
+          <section className="bg-surface-container-low relative overflow-hidden rounded-xl p-6">
+            <div className="mb-4 flex items-start justify-between">
+              <h2 className="text-primary-dim text-xs font-bold uppercase tracking-widest">Persistência de mensagens</h2>
+              <span
+                className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
+                  messagePersistenceEnabled
+                    ? 'bg-emerald-100 text-emerald-900 ring-1 ring-emerald-200/80'
+                    : 'bg-slate-200 text-slate-700 ring-1 ring-slate-300/70'
+                }`}
+              >
+                {messagePersistenceEnabled ? 'Ativa' : 'Inativa'}
+              </span>
+            </div>
+            <p className="text-outline text-xs leading-relaxed">
+              Define se mensagens enviadas/recebidas desta instância serão gravadas no banco para histórico.
+            </p>
+            <div className="mt-4">
+              <label className="flex cursor-pointer items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300"
+                  checked={messagePersistenceEnabled}
+                  disabled={messagePersistenceLoading}
+                  onChange={(e) => {
+                    void handleToggleMessagePersistence(e.target.checked);
+                  }}
+                />
+                <span className="text-outline text-sm">
+                  Persistir mensagens no banco (padrão recomendado)
+                </span>
+              </label>
+            </div>
+            {messagePersistenceError && (
+              <p className="mt-3 rounded-lg bg-error/10 px-3 py-2 text-xs text-error" role="alert">
+                {messagePersistenceError}
+              </p>
+            )}
           </section>
 
           <section className="bg-surface-container-low relative overflow-hidden rounded-xl p-6">
