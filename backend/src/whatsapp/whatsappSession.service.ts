@@ -8,7 +8,6 @@ import type {
   WhatsAppMediaSendInput,
   WhatsAppSessionServiceBootstrapOptions,
 } from './whatsapp.types';
-import { WhatsAppUserSession } from './whatsappUserSession';
 import { SocketGateway } from '../realtime/socketGateway';
 import { WebhookDispatcher } from '../realtime/webhookDispatcher';
 import { disableWebhookDeliveryForInstance } from '../services/instance.service';
@@ -18,6 +17,7 @@ import {
   listSavedContactsForUser,
   upsertContacts,
 } from '../services/whatsappContact.service';
+import type { IWhatsAppSessionClient, WhatsAppProvider } from './whatsapp.provider';
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -32,12 +32,13 @@ function errorMessage(err: unknown): string {
  * Registo de sessões [Baileys](https://github.com/WhiskeySockets/Baileys) por utilizador do painel.
  */
 export class WhatsAppSessionService implements IWhatsAppSessionService {
-  private readonly sessions = new Map<string, WhatsAppUserSession>();
+  private readonly sessions = new Map<string, IWhatsAppSessionClient>();
   private readonly initPromises = new Map<string, Promise<void>>();
 
   constructor(
     private readonly log: Logger,
     private readonly options: WhatsAppSessionServiceBootstrapOptions,
+    private readonly provider: WhatsAppProvider,
     private readonly socketGateway: SocketGateway,
     private readonly webhookDispatcher: WebhookDispatcher
   ) {}
@@ -46,9 +47,9 @@ export class WhatsAppSessionService implements IWhatsAppSessionService {
     return `${userId}:${instanceId}`;
   }
 
-  private createSession(userId: string, instanceId: string): WhatsAppUserSession {
+  private createSession(userId: string, instanceId: string): IWhatsAppSessionClient {
     const dataPath = path.join(this.options.baseDataPath, userId, instanceId);
-    return new WhatsAppUserSession(this.log.child({ userId, instanceId }), {
+    return this.provider.createSessionClient(this.log.child({ userId, instanceId }), {
       userId,
       instanceId,
       dataPath,
@@ -214,6 +215,12 @@ export class WhatsAppSessionService implements IWhatsAppSessionService {
     if (!session) {
       throw new AppError(
         'WhatsApp não iniciado. Use o painel para conectar (Gerar QR) antes de listar mensagens.',
+        503
+      );
+    }
+    if (!this.provider.capabilities.supportsConversationHistory) {
+      throw new AppError(
+        'Provider WhatsApp atual não suporta listagem de histórico por conversa.',
         503
       );
     }

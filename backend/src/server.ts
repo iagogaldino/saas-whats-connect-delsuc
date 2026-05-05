@@ -16,6 +16,7 @@ import {
 } from './services/instance.service';
 import {
   WhatsAppSessionService,
+  createWhatsAppProvider,
   loadWhatsappRuntimeConfig,
   resolveBaseDataPathAbsolute,
 } from './whatsapp';
@@ -39,6 +40,7 @@ log.info(
 const isProd = process.env.NODE_ENV === 'production';
 const socketGateway = new SocketGateway();
 const webhookDispatcher = new WebhookDispatcher(log);
+const whatsappProvider = createWhatsAppProvider(log);
 
 const mongoUri =
   process.env.MONGODB_URI ?? 'mongodb://127.0.0.1:27017/whatsapp_otp';
@@ -64,6 +66,7 @@ const whatsappSessions = new WhatsAppSessionService(
     baseDataPath,
     connectTimeoutMs: waRuntime.connectTimeoutMs,
   },
+  whatsappProvider,
   socketGateway,
   webhookDispatcher
 );

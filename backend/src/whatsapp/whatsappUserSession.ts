@@ -16,6 +16,7 @@ import type {
   WhatsAppIncomingMessageEvent,
   WhatsAppMediaSendInput,
 } from './whatsapp.types';
+import type { IWhatsAppSessionClient } from './whatsapp.provider';
 
 export type WhatsAppContactChangePartial = {
   jid: string;
@@ -65,7 +66,7 @@ function toMainUserJid(fullJid: string | undefined): string | null {
 /**
  * Uma sessão [Baileys](https://github.com/WhiskeySockets/Baileys) por utilizador do painel (sem Puppeteer).
  */
-export class WhatsAppUserSession {
+export class WhatsAppUserSession implements IWhatsAppSessionClient {
   private sock: WASocket | null = null;
   private saveCreds: (() => Promise<void>) | null = null;
   private ready = false;

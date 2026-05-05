@@ -17,3 +17,10 @@ export type {
 } from './whatsapp.types';
 export { WhatsAppSessionService } from './whatsappSession.service';
 export { loadWhatsappRuntimeConfig, resolveBaseDataPathAbsolute } from './whatsapp.config';
+export { createWhatsAppProvider } from './provider.factory';
+export type {
+  IWhatsAppSessionClient,
+  WhatsAppProvider,
+  WhatsAppProviderCapabilities,
+  WhatsAppSessionClientOptions,
+} from './whatsapp.provider';
