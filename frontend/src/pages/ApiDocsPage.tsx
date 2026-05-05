@@ -95,6 +95,11 @@ export function ApiDocsPage() {
                 </a>
               </li>
               <li>
+                <a href="#conversation-messages" className="text-primary hover:underline">
+                  Mensagens por conversa (REST)
+                </a>
+              </li>
+              <li>
                 <a href="#send-code" className="text-primary hover:underline">
                   Envio de mensagem
                 </a>
@@ -353,6 +358,53 @@ curl -sS -H "Authorization: Bearer $TOKEN" \\
   "$API_BASE/api/v1/instances/$INST/whatsapp/contacts?filter=all"
 
 # Resposta exemplo: { "items": [ { "jid": "...", "name": "...", "phone": "...", "notify": "..." } ] }`}</CodeBlock>
+        </Section>
+
+        <Section id="conversation-messages" title="Mensagens por conversa (REST)">
+          <p>
+            <strong>Endpoint:</strong>{' '}
+            <code className="font-mono text-xs">
+              GET /api/v1/instances/&lt;instanceId&gt;/whatsapp/conversations/&lt;jid&gt;/messages
+            </code>
+            . Autenticação:{' '}
+            <code className="font-mono text-xs">Authorization: Bearer &lt;JWT de sessão ou chave de API otp_…&gt;</code>.
+          </p>
+          <p>
+            <strong>Path params:</strong> <code className="font-mono text-xs">instanceId</code> (ObjectId ou código da
+            instância) e <code className="font-mono text-xs">jid</code> da conversa. Você pode enviar só o número (ex.:{' '}
+            <code className="font-mono text-xs">5511999999999</code>) que a API converte para JID automaticamente, ou
+            informar o JID completo (ex.: <code className="font-mono text-xs">5511999999999@s.whatsapp.net</code>).
+          </p>
+          <p>
+            <strong>Query params:</strong> <code className="font-mono text-xs">limit</code> opcional (1..100, padrão 20) e{' '}
+            <code className="font-mono text-xs">beforeMessageId</code> opcional (cursor para a próxima página).
+          </p>
+          <CodeBlock>{`# Exemplo: primeira página
+GET ${base}/api/v1/instances/<instanceId>/whatsapp/conversations/5511999999999/messages?limit=20
+Authorization: Bearer <token>
+
+# Exemplo de paginação (usar o nextCursor da resposta anterior)
+GET ${base}/api/v1/instances/<instanceId>/whatsapp/conversations/5511999999999/messages?limit=20&beforeMessageId=<nextCursor>
+Authorization: Bearer <token>
+
+# Resposta 200 (exemplo)
+# {
+#   "items": [
+#     {
+#       "id": "3EB0C767F26B1C0A0F8C",
+#       "jid": "5511999999999@s.whatsapp.net",
+#       "fromMe": false,
+#       "timestamp": "2026-05-05T10:12:00.000Z",
+#       "text": "Olá, tudo bem?",
+#       "type": "conversation"
+#     }
+#   ],
+#   "nextCursor": "3EB0C767F26B1C0A0F8B"
+# }`}</CodeBlock>
+          <p className="text-outline text-xs">
+            Erros comuns: 400 para parâmetros inválidos/JID ausente e 503 quando a sessão WhatsApp da instância não está
+            conectada.
+          </p>
         </Section>
 
         <Section id="send-code" title="Envio de mensagem">

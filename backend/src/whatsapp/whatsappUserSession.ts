@@ -5,12 +5,17 @@ import type { Logger } from 'pino';
 import makeWASocket, {
   DisconnectReason,
   fetchLatestBaileysVersion,
+  proto,
   useMultiFileAuthState,
 } from '@whiskeysockets/baileys';
 import type { WASocket } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import { AppError } from '../errors/AppError';
-import type { WhatsAppIncomingMessageEvent, WhatsAppMediaSendInput } from './whatsapp.types';
+import type {
+  WhatsAppConversationMessagesBody,
+  WhatsAppIncomingMessageEvent,
+  WhatsAppMediaSendInput,
+} from './whatsapp.types';
 
 export type WhatsAppContactChangePartial = {
   jid: string;
@@ -384,6 +389,101 @@ export class WhatsAppUserSession {
     }
   }
 
+  async listConversationMessages(
+    jid: string,
+    opts?: { limit?: number; beforeMessageId?: string }
+  ): Promise<WhatsAppConversationMessagesBody> {
+    if (!this.ready || !this.sock) {
+      throw new AppError(
+        'Serviço WhatsApp indisponível. Aguarde a conexão ou escaneie o QR code no painel.',
+        503
+      );
+    }
+
+    const limit = Math.max(1, Math.min(opts?.limit ?? 20, 100));
+    const cursor =
+      opts?.beforeMessageId && opts.beforeMessageId.trim().length > 0
+        ? ({ id: opts.beforeMessageId.trim(), remoteJid: jid, fromMe: false } as proto.IMessageKey)
+        : undefined;
+
+    const hasLoadMessages = typeof (this.sock as WASocket & { loadMessages?: unknown }).loadMessages === 'function';
+    this.log.info(
+      {
+        jid,
+        limit,
+        beforeMessageId: opts?.beforeMessageId ?? null,
+        hasLoadMessages,
+      },
+      'WhatsApp: iniciando listagem de mensagens da conversa'
+    );
+
+    let rows: proto.IWebMessageInfo[];
+    try {
+      const sockWithHistory = this.sock as WASocket & {
+        loadMessages?: (
+          remoteJid: string,
+          count: number,
+          cursor?: proto.IMessageKey
+        ) => Promise<proto.IWebMessageInfo[]>;
+      };
+      if (!sockWithHistory.loadMessages) {
+        throw new AppError(
+          'Versão atual do Baileys não expõe carregamento de histórico de mensagens.',
+          503
+        );
+      }
+      rows = await sockWithHistory.loadMessages(jid, limit, cursor);
+      this.log.info(
+        { jid, limit, returnedCount: rows.length },
+        'WhatsApp: listagem de mensagens da conversa concluída'
+      );
+    } catch (err) {
+      if (err instanceof AppError) {
+        this.log.warn(
+          {
+            jid,
+            limit,
+            beforeMessageId: opts?.beforeMessageId ?? null,
+            message: err.message,
+            statusCode: err.statusCode,
+          },
+          'WhatsApp: erro de aplicação ao listar mensagens da conversa'
+        );
+        throw err;
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      this.log.error(
+        {
+          err: message,
+          stack: err instanceof Error ? err.stack : undefined,
+          jid,
+          limit,
+          beforeMessageId: opts?.beforeMessageId ?? null,
+          hasLoadMessages,
+        },
+        'WhatsApp: falha inesperada ao listar mensagens da conversa'
+      );
+      throw new AppError('Não foi possível listar mensagens da conversa no WhatsApp.', 503);
+    }
+
+    const items = rows.map((msg) => {
+      const key = msg.key ?? {};
+      const remoteJid = key.remoteJid ?? jid;
+      return {
+        id: key.id ?? `msg_${Date.now()}`,
+        jid: remoteJid,
+        fromMe: Boolean(key.fromMe),
+        timestamp: this.toIsoTimestamp(msg.messageTimestamp),
+        text: this.extractIncomingText(msg.message),
+        type: this.getMessageType(msg.message),
+      };
+    });
+
+    const last = rows.at(-1);
+    const nextCursor = last?.key?.id ?? null;
+    return { items, nextCursor };
+  }
+
   async updateProfilePhoto(imageBuffer: Buffer, mimeType: string): Promise<void> {
     if (!this.ready || !this.sock) {
       throw new AppError(
@@ -456,6 +556,34 @@ export class WhatsAppUserSession {
     if (video && typeof video.caption === 'string') return video.caption;
 
     return '';
+  }
+
+  private getMessageType(message: unknown): string {
+    if (!message || typeof message !== 'object') return 'unknown';
+    const m = message as Record<string, unknown>;
+    const keys = Object.keys(m);
+    if (keys.length === 0) return 'unknown';
+    return String(keys[0]);
+  }
+
+  private toIsoTimestamp(raw: unknown): string {
+    if (raw instanceof Date) return raw.toISOString();
+    if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
+      return new Date(raw * 1000).toISOString();
+    }
+    if (typeof raw === 'string') {
+      const num = Number(raw);
+      if (Number.isFinite(num) && num > 0) {
+        return new Date(num * 1000).toISOString();
+      }
+    }
+    if (typeof raw === 'object' && raw && 'toString' in raw) {
+      const num = Number((raw as { toString(): string }).toString());
+      if (Number.isFinite(num) && num > 0) {
+        return new Date(num * 1000).toISOString();
+      }
+    }
+    return new Date().toISOString();
   }
 
   private scheduleReconnect(delayMs = 1_500): void {

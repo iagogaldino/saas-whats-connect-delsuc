@@ -57,6 +57,7 @@ Na primeira vez, escaneie o QR code exibido no terminal com o WhatsApp no celula
 - `POST /api/v1/instances/:instanceId/whatsapp/pairing/start`
 - `GET /api/v1/instances/:instanceId/whatsapp/status`
 - `GET /api/v1/instances/:instanceId/whatsapp/qr`
+- `GET /api/v1/instances/:instanceId/whatsapp/conversations/:jid/messages?limit=20&beforeMessageId=<cursor>` (`:jid` pode ser só número)
 - `PUT /api/v1/instances/:instanceId/whatsapp/profile-photo` (JWT + multipart `photo`)
 - `POST /api/v1/instances/:instanceId/whatsapp/logout`
 - `POST /api/v1/auth/instances/:instanceId/send-code`
@@ -73,6 +74,47 @@ Corpo JSON:
 
 - Respostas **400**: payload inválido ou número sem WhatsApp.
 - Respostas **503**: cliente WhatsApp não inicializado ou não conectado (aguarde o QR ou reconexão).
+
+### Listar mensagens de uma conversa
+
+Endpoint para listar mensagens (recebidas e enviadas) de um chat específico da instância:
+
+- `GET /api/v1/instances/:instanceId/whatsapp/conversations/:jid/messages`
+- Auth: `Authorization: Bearer <jwt ou api key otp_...>`
+- `:jid` pode ser:
+  - apenas número (ex.: `5511999999999`) — recomendado
+  - JID completo (ex.: `5511999999999@s.whatsapp.net`)
+- Query opcional:
+  - `limit`: `1..100` (padrão `20`)
+  - `beforeMessageId`: cursor da página anterior para paginação
+
+Exemplo:
+
+```bash
+curl -sS \
+  -H "Authorization: Bearer <token>" \
+  "http://localhost:3001/api/v1/instances/<instanceId>/whatsapp/conversations/5511999999999/messages?limit=20"
+```
+
+Resposta (exemplo):
+
+```json
+{
+  "items": [
+    {
+      "id": "3EB0C767F26B1C0A0F8C",
+      "jid": "5511999999999@s.whatsapp.net",
+      "fromMe": false,
+      "timestamp": "2026-05-05T10:12:00.000Z",
+      "text": "Olá, tudo bem?",
+      "type": "conversation"
+    }
+  ],
+  "nextCursor": "3EB0C767F26B1C0A0F8B"
+}
+```
+
+Para buscar a próxima página, repita a mesma chamada incluindo `beforeMessageId=<nextCursor>`.
 
 ## Aviso
 

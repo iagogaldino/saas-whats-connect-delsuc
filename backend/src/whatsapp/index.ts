@@ -11,6 +11,8 @@ export type {
   WhatsAppIncomingMessageEvent,
   WhatsAppContact,
   WhatsAppContactsBody,
+  WhatsAppConversationMessage,
+  WhatsAppConversationMessagesBody,
   WhatsAppMediaSendInput,
 } from './whatsapp.types';
 export { WhatsAppSessionService } from './whatsappSession.service';

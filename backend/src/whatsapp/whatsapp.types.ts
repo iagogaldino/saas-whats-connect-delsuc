@@ -30,6 +30,13 @@
  * - 200: `{ items: WhatsAppContact[] }` — sincronizados pela sessão Baileys;
  *   `named` ordenado por nome ASC; `all` por nome e JID. Lista vazia até haver dados.
  *
+ * ## GET /api/v1/instances/:instanceId/whatsapp/conversations/:jid/messages
+ * - Auth: Bearer (JWT ou API key)
+ * - Query:
+ *   - `limit` opcional (1..100, omissão=20)
+ *   - `beforeMessageId` opcional (cursor para paginação)
+ * - 200: `{ items: WhatsAppConversationMessage[], nextCursor: string | null }`
+ *
  * ## POST /api/v1/auth/instances/:instanceId/send-code
  * - Auth: Bearer
  * - Body: `{ phoneNumber, message }` (validação zod existente)
@@ -92,6 +99,20 @@ export type WhatsAppIncomingMessageEvent = {
   instanceId: string;
 };
 
+export type WhatsAppConversationMessage = {
+  id: string;
+  jid: string;
+  fromMe: boolean;
+  timestamp: string;
+  text: string;
+  type: string;
+};
+
+export type WhatsAppConversationMessagesBody = {
+  items: WhatsAppConversationMessage[];
+  nextCursor: string | null;
+};
+
 export type WhatsAppMediaSendInput = {
   phoneNumber: string;
   fileBuffer: Buffer;
@@ -124,6 +145,12 @@ export interface IWhatsAppSessionService {
     instanceId: string,
     opts?: { filter?: 'named' | 'all' }
   ): Promise<WhatsAppContact[]>;
+  listConversationMessages(
+    userId: string,
+    instanceId: string,
+    jid: string,
+    opts?: { limit?: number; beforeMessageId?: string }
+  ): Promise<WhatsAppConversationMessagesBody>;
   getListeningStatus(userId: string, instanceId: string): Promise<WhatsAppListeningStatusBody>;
   setListeningEnabled(
     userId: string,

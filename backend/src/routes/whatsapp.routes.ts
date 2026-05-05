@@ -19,6 +19,26 @@ const contactsQuerySchema = z.object({
   filter: z.enum(['named', 'all']).optional().default('named'),
 });
 
+const conversationMessagesQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+  beforeMessageId: z.string().trim().min(1).max(300).optional(),
+});
+
+function toConversationJid(rawValue: string): string {
+  const raw = decodeURIComponent(rawValue || '').trim();
+  if (!raw) {
+    throw new AppError('Número da conversa é obrigatório.', 400);
+  }
+  if (raw.includes('@')) {
+    return raw;
+  }
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length < 8 || digits.length > 20) {
+    throw new AppError('Número da conversa inválido.', 400);
+  }
+  return `${digits}@s.whatsapp.net`;
+}
+
 export function createWhatsAppRouter(
   manager: IWhatsAppSessionService,
   webhookDispatcher: WebhookDispatcher
@@ -80,6 +100,25 @@ export function createWhatsAppRouter(
         filter: parsed.data.filter,
       });
       res.json({ items });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.get('/conversations/:jid/messages', async (req, res, next) => {
+    try {
+      const parsed = conversationMessagesQuerySchema.safeParse(req.query);
+      if (!parsed.success) {
+        return next(parsed.error);
+      }
+      const userId = req.user!.id;
+      const instanceId = req.instance!.id;
+      const jid = toConversationJid(req.params.jid || '');
+      const result = await manager.listConversationMessages(userId, instanceId, jid, {
+        limit: parsed.data.limit,
+        beforeMessageId: parsed.data.beforeMessageId,
+      });
+      res.json(result);
     } catch (e) {
       next(e);
     }

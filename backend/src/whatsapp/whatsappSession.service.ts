@@ -2,6 +2,7 @@ import path from 'path';
 import type { Logger } from 'pino';
 import { AppError } from '../errors/AppError';
 import type {
+  WhatsAppConversationMessagesBody,
   IWhatsAppSessionService,
   WhatsAppContact,
   WhatsAppMediaSendInput,
@@ -201,6 +202,22 @@ export class WhatsAppSessionService implements IWhatsAppSessionService {
     opts?: { filter?: 'named' | 'all' }
   ): Promise<WhatsAppContact[]> {
     return listSavedContactsForUser(userId, instanceId, opts);
+  }
+
+  async listConversationMessages(
+    userId: string,
+    instanceId: string,
+    jid: string,
+    opts?: { limit?: number; beforeMessageId?: string }
+  ): Promise<WhatsAppConversationMessagesBody> {
+    const session = this.sessions.get(this.sessionKey(userId, instanceId));
+    if (!session) {
+      throw new AppError(
+        'WhatsApp não iniciado. Use o painel para conectar (Gerar QR) antes de listar mensagens.',
+        503
+      );
+    }
+    return session.listConversationMessages(jid, opts);
   }
 
   async destroySession(userId: string, instanceId: string): Promise<void> {
