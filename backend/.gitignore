@@ -10,6 +10,7 @@ dist/
 .wwebjs_auth/
 .wwebjs_cache/
 session-otp-service/
+.message_media/
 
 # Logs e artefatos locais
 *.log
