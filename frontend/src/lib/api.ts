@@ -100,6 +100,12 @@ export type MessagesResponse = {
   limit: number;
 };
 
+export type DeleteMessagesResponse = {
+  deletedMessages: number;
+  deletedMediaFiles: number;
+  mediaDeleteErrors: number;
+};
+
 export type ApiKeyListItem = {
   id: string;
   name: string | null;
@@ -811,6 +817,50 @@ export async function fetchMessages(instanceId: string, page = 1, limit = 20): P
   }
 
   return data as MessagesResponse;
+}
+
+export async function deleteConversationMessagesForInstance(
+  instanceId: string,
+  jidOrPhone: string
+): Promise<DeleteMessagesResponse> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/instances/${encodeURIComponent(instanceId)}/whatsapp/conversations/${encodeURIComponent(jidOrPhone)}/messages`
+    ),
+    {
+      method: 'DELETE',
+      headers: authHeaders(),
+    }
+  );
+  redirectLoginIfUnauthorized(res);
+  const data = (await res.json().catch(() => ({}))) as DeleteMessagesResponse | ApiErrorBody;
+  if (!res.ok) {
+    const err = data as ApiErrorBody;
+    const msg = err.error ?? `Erro HTTP ${res.status}`;
+    const e = new Error(msg) as Error & { status: number; details?: unknown };
+    e.status = res.status;
+    e.details = err.details;
+    throw e;
+  }
+  return data as DeleteMessagesResponse;
+}
+
+export async function deleteAllMessagesForInstance(instanceId: string): Promise<DeleteMessagesResponse> {
+  const res = await fetch(apiUrl(`/api/v1/instances/${encodeURIComponent(instanceId)}/messages`), {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  redirectLoginIfUnauthorized(res);
+  const data = (await res.json().catch(() => ({}))) as DeleteMessagesResponse | ApiErrorBody;
+  if (!res.ok) {
+    const err = data as ApiErrorBody;
+    const msg = err.error ?? `Erro HTTP ${res.status}`;
+    const e = new Error(msg) as Error & { status: number; details?: unknown };
+    e.status = res.status;
+    e.details = err.details;
+    throw e;
+  }
+  return data as DeleteMessagesResponse;
 }
 
 export async function listApiKeys(): Promise<ApiKeyListItem[]> {

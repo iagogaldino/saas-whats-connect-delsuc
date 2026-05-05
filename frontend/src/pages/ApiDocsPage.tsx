@@ -405,6 +405,48 @@ Authorization: Bearer <token>
             Erros comuns: 400 para parâmetros inválidos/JID ausente e 503 quando a sessão WhatsApp da instância não está
             conectada.
           </p>
+          <p className="text-outline mt-2 text-xs">
+            Para mensagens com arquivo, a resposta pode incluir <code className="font-mono text-xs">mediaUrl</code>,{' '}
+            <code className="font-mono text-xs">mediaMimeType</code>,{' '}
+            <code className="font-mono text-xs">mediaFileName</code> e{' '}
+            <code className="font-mono text-xs">mediaSize</code>.
+          </p>
+        </Section>
+
+        <Section id="conversation-delete" title="Remover histórico persistido">
+          <p>
+            <strong>Remover por contato:</strong>{' '}
+            <code className="font-mono text-xs">
+              DELETE /api/v1/instances/&lt;instanceId&gt;/whatsapp/conversations/&lt;jid&gt;/messages
+            </code>
+          </p>
+          <p>
+            No parâmetro <code className="font-mono text-xs">:jid</code>, você pode usar apenas o telefone (ex.:{' '}
+            <code className="font-mono text-xs">5511999999999</code>) ou o JID completo (ex.:{' '}
+            <code className="font-mono text-xs">5511999999999@s.whatsapp.net</code>).
+          </p>
+          <p>
+            <strong>Remover tudo da instância:</strong>{' '}
+            <code className="font-mono text-xs">DELETE /api/v1/instances/&lt;instanceId&gt;/messages</code>
+          </p>
+          <p>
+            Ambos exigem <code className="font-mono text-xs">Authorization: Bearer &lt;JWT de sessão&gt;</code> (API key
+            não autorizada), e removem registros do banco + arquivos persistidos.
+          </p>
+          <CodeBlock>{`# Limpar histórico de um contato específico
+DELETE ${base}/api/v1/instances/<instanceId>/whatsapp/conversations/5511999999999/messages
+Authorization: Bearer <jwt>
+
+# Limpar todo histórico da instância
+DELETE ${base}/api/v1/instances/<instanceId>/messages
+Authorization: Bearer <jwt>
+
+# Resposta 200 (exemplo)
+# {
+#   "deletedMessages": 12,
+#   "deletedMediaFiles": 3,
+#   "mediaDeleteErrors": 0
+# }`}</CodeBlock>
         </Section>
 
         <Section id="send-code" title="Envio de mensagem">

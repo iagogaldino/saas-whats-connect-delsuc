@@ -58,10 +58,12 @@ Na primeira vez, escaneie o QR code exibido no terminal com o WhatsApp no celula
 - `GET /api/v1/instances/:instanceId/whatsapp/status`
 - `GET /api/v1/instances/:instanceId/whatsapp/qr`
 - `GET /api/v1/instances/:instanceId/whatsapp/conversations/:jid/messages?limit=20&beforeMessageId=<cursor>` (`:jid` pode ser só número)
+- `DELETE /api/v1/instances/:instanceId/whatsapp/conversations/:jid/messages` (JWT; remove histórico de um contato + mídias)
 - `PUT /api/v1/instances/:instanceId/whatsapp/profile-photo` (JWT + multipart `photo`)
 - `POST /api/v1/instances/:instanceId/whatsapp/logout`
 - `POST /api/v1/auth/instances/:instanceId/send-code`
 - `GET /api/v1/instances/:instanceId/messages`
+- `DELETE /api/v1/instances/:instanceId/messages` (JWT; remove todo histórico da instância + mídias)
 
 Corpo JSON:
 
@@ -115,6 +117,28 @@ Resposta (exemplo):
 ```
 
 Para buscar a próxima página, repita a mesma chamada incluindo `beforeMessageId=<nextCursor>`.
+
+### Remover mensagens persistidas
+
+Você pode limpar histórico salvo no Mongo e arquivos de mídia em disco (`.message_media`):
+
+- `DELETE /api/v1/instances/:instanceId/whatsapp/conversations/:jid/messages`
+  - Remove mensagens de um contato específico da instância.
+  - `:jid` pode ser só telefone (ex.: `5511999999999`) ou JID completo (ex.: `5511999999999@s.whatsapp.net`).
+  - Auth: `Authorization: Bearer <jwt>` (somente sessão do painel).
+- `DELETE /api/v1/instances/:instanceId/messages`
+  - Remove todo o histórico persistido da instância.
+  - Auth: `Authorization: Bearer <jwt>`.
+
+Resposta de ambos (exemplo):
+
+```json
+{
+  "deletedMessages": 12,
+  "deletedMediaFiles": 3,
+  "mediaDeleteErrors": 0
+}
+```
 
 ## Aviso
 

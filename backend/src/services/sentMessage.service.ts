@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import crypto from 'crypto';
-import { mkdir, readFile, stat, writeFile } from 'fs/promises';
+import { mkdir, readFile, rm, stat, unlink, writeFile } from 'fs/promises';
 import path from 'path';
 import { AppError } from '../errors/AppError';
 import { SentMessage } from '../models/SentMessage';
@@ -36,6 +36,12 @@ export type MessageMediaResult = {
   fileName: string;
 };
 
+export type DeleteMessagesResult = {
+  deletedMessages: number;
+  deletedMediaFiles: number;
+  mediaDeleteErrors: number;
+};
+
 export function formatSendError(err: unknown): string {
   if (err instanceof AppError) return err.message.slice(0, MAX_ERROR_LEN);
   if (err instanceof Error) return err.message.slice(0, MAX_ERROR_LEN);
@@ -58,6 +64,46 @@ function normalizeJid(phoneOrJid: string): string {
 function resolveMediaDirAbsolute(): string {
   const configured = (process.env.MESSAGE_MEDIA_DIR || DEFAULT_MEDIA_DIR).trim();
   return path.isAbsolute(configured) ? configured : path.resolve(process.cwd(), configured);
+}
+
+function resolveScopedMediaAbsolutePath(
+  relativeMediaPath: string,
+  userId: string,
+  instanceId: string
+): string | null {
+  const baseDir = resolveMediaDirAbsolute();
+  const scopedRoot = path.resolve(baseDir, userId, instanceId);
+  const candidate = path.resolve(baseDir, relativeMediaPath);
+  if (candidate === scopedRoot || candidate.startsWith(`${scopedRoot}${path.sep}`)) {
+    return candidate;
+  }
+  return null;
+}
+
+async function deleteMediaPathsForScope(
+  mediaPaths: string[],
+  userId: string,
+  instanceId: string
+): Promise<{ deletedMediaFiles: number; mediaDeleteErrors: number }> {
+  let deletedMediaFiles = 0;
+  let mediaDeleteErrors = 0;
+  const uniquePaths = [...new Set(mediaPaths.filter((item) => item && item.trim().length > 0))];
+
+  for (const relativePath of uniquePaths) {
+    const safeAbsolutePath = resolveScopedMediaAbsolutePath(relativePath, userId, instanceId);
+    if (!safeAbsolutePath) {
+      mediaDeleteErrors += 1;
+      continue;
+    }
+    try {
+      await unlink(safeAbsolutePath);
+      deletedMediaFiles += 1;
+    } catch {
+      mediaDeleteErrors += 1;
+    }
+  }
+
+  return { deletedMediaFiles, mediaDeleteErrors };
 }
 
 async function saveMediaFile(input: {
@@ -285,6 +331,73 @@ export async function getMessageMediaForUser(
     fileBuffer: await readFile(absPath),
     mimeType: String(doc.mediaMimeType || 'application/octet-stream'),
     fileName: String(doc.mediaFileName || 'media.bin'),
+  };
+}
+
+export async function deleteConversationMessagesForUser(
+  userId: string,
+  instanceId: string,
+  jid: string
+): Promise<DeleteMessagesResult> {
+  const normalizedJid = normalizeJid(jid);
+  const filter = {
+    userId: new mongoose.Types.ObjectId(userId),
+    instanceId: new mongoose.Types.ObjectId(instanceId),
+    jid: normalizedJid,
+  };
+  const docs = await SentMessage.find(filter).select({ _id: 1, mediaPath: 1 }).lean();
+  if (docs.length === 0) {
+    return { deletedMessages: 0, deletedMediaFiles: 0, mediaDeleteErrors: 0 };
+  }
+
+  const mediaPaths = docs
+    .map((doc) => (typeof doc.mediaPath === 'string' ? doc.mediaPath : ''))
+    .filter((value) => value.length > 0);
+  const docIds = docs.map((doc) => doc._id);
+  const deleteResult = await SentMessage.deleteMany({ _id: { $in: docIds } });
+  const mediaResult = await deleteMediaPathsForScope(mediaPaths, userId, instanceId);
+  return {
+    deletedMessages: deleteResult.deletedCount ?? 0,
+    deletedMediaFiles: mediaResult.deletedMediaFiles,
+    mediaDeleteErrors: mediaResult.mediaDeleteErrors,
+  };
+}
+
+export async function deleteAllMessagesForUser(
+  userId: string,
+  instanceId: string
+): Promise<DeleteMessagesResult> {
+  const filter = {
+    userId: new mongoose.Types.ObjectId(userId),
+    instanceId: new mongoose.Types.ObjectId(instanceId),
+  };
+  const docs = await SentMessage.find(filter).select({ _id: 1, mediaPath: 1 }).lean();
+  if (docs.length === 0) {
+    return { deletedMessages: 0, deletedMediaFiles: 0, mediaDeleteErrors: 0 };
+  }
+
+  const mediaPaths = docs
+    .map((doc) => (typeof doc.mediaPath === 'string' ? doc.mediaPath : ''))
+    .filter((value) => value.length > 0);
+  const uniqueMediaPaths = [...new Set(mediaPaths)];
+  const deleteResult = await SentMessage.deleteMany(filter);
+
+  let deletedMediaFiles = 0;
+  let mediaDeleteErrors = 0;
+  const instanceMediaDir = path.resolve(resolveMediaDirAbsolute(), userId, instanceId);
+  try {
+    await rm(instanceMediaDir, { recursive: true, force: true });
+    deletedMediaFiles = uniqueMediaPaths.length;
+  } catch {
+    const fallback = await deleteMediaPathsForScope(uniqueMediaPaths, userId, instanceId);
+    deletedMediaFiles = fallback.deletedMediaFiles;
+    mediaDeleteErrors = fallback.mediaDeleteErrors;
+  }
+
+  return {
+    deletedMessages: deleteResult.deletedCount ?? 0,
+    deletedMediaFiles,
+    mediaDeleteErrors,
   };
 }
 

@@ -2,6 +2,8 @@ import QRCode from 'react-qr-code';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  deleteAllMessagesForInstance,
+  deleteConversationMessagesForInstance,
   fetchMessagePersistenceForInstance,
   fetchWhatsAppProfilePhotoForInstance,
   fetchListeningStatusForInstance,
@@ -60,6 +62,10 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
   const [messagePersistenceEnabled, setMessagePersistenceEnabled] = useState(true);
   const [messagePersistenceLoading, setMessagePersistenceLoading] = useState(false);
   const [messagePersistenceError, setMessagePersistenceError] = useState<string | null>(null);
+  const [deleteContactRef, setDeleteContactRef] = useState('');
+  const [deleteMessagesLoading, setDeleteMessagesLoading] = useState(false);
+  const [deleteMessagesFeedback, setDeleteMessagesFeedback] = useState<string | null>(null);
+  const [deleteMessagesError, setDeleteMessagesError] = useState<string | null>(null);
   const [webhookUrl, setWebhookUrl] = useState('');
   const [webhookEnabled, setWebhookEnabled] = useState(false);
   const [webhookSecretLast4, setWebhookSecretLast4] = useState<string | null>(null);
@@ -321,6 +327,57 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
       setMessagePersistenceError(e instanceof Error ? e.message : 'Falha ao atualizar persistência');
     } finally {
       setMessagePersistenceLoading(false);
+    }
+  }
+
+  async function handleDeleteContactMessages() {
+    const raw = deleteContactRef.trim();
+    if (!raw) {
+      setDeleteMessagesError('Informe um número ou JID para remover as mensagens do contato.');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Remover todas as mensagens do contato "${raw}" desta instância? Essa ação não pode ser desfeita.`
+      )
+    ) {
+      return;
+    }
+    setDeleteMessagesLoading(true);
+    setDeleteMessagesError(null);
+    setDeleteMessagesFeedback(null);
+    try {
+      const result = await deleteConversationMessagesForInstance(instanceId, raw);
+      setDeleteMessagesFeedback(
+        `Contato limpo: ${result.deletedMessages} mensagem(ns), ${result.deletedMediaFiles} arquivo(s) removido(s), ${result.mediaDeleteErrors} erro(s) de arquivo.`
+      );
+    } catch (e) {
+      setDeleteMessagesError(e instanceof Error ? e.message : 'Falha ao remover mensagens do contato');
+    } finally {
+      setDeleteMessagesLoading(false);
+    }
+  }
+
+  async function handleDeleteAllMessages() {
+    if (
+      !window.confirm(
+        'Remover TODO o histórico da instância (mensagens e mídias)? Essa ação não pode ser desfeita.'
+      )
+    ) {
+      return;
+    }
+    setDeleteMessagesLoading(true);
+    setDeleteMessagesError(null);
+    setDeleteMessagesFeedback(null);
+    try {
+      const result = await deleteAllMessagesForInstance(instanceId);
+      setDeleteMessagesFeedback(
+        `Histórico total removido: ${result.deletedMessages} mensagem(ns), ${result.deletedMediaFiles} arquivo(s) removido(s), ${result.mediaDeleteErrors} erro(s) de arquivo.`
+      );
+    } catch (e) {
+      setDeleteMessagesError(e instanceof Error ? e.message : 'Falha ao remover todo o histórico');
+    } finally {
+      setDeleteMessagesLoading(false);
     }
   }
 
@@ -998,6 +1055,50 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
                 {messagePersistenceError}
               </p>
             )}
+            <div className="mt-5 border-t border-outline-variant/10 pt-4">
+              <h3 className="text-on-surface text-xs font-bold uppercase tracking-wider">Limpeza de histórico</h3>
+              <p className="text-outline mt-2 text-xs leading-relaxed">
+                Você pode apagar mensagens de um contato específico ou remover todo o histórico desta instância
+                (incluindo arquivos salvos).
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+                <input
+                  type="text"
+                  value={deleteContactRef}
+                  onChange={(e) => setDeleteContactRef(e.target.value)}
+                  placeholder="Ex.: 5511999999999 ou 5511999999999@s.whatsapp.net"
+                  className="border-outline-variant focus:ring-primary/30 w-full rounded-lg border bg-white px-3 py-2 text-sm outline-none focus:ring-2"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteContactMessages()}
+                  disabled={deleteMessagesLoading}
+                  className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-bold uppercase tracking-wide text-amber-900 disabled:opacity-60"
+                >
+                  Apagar contato
+                </button>
+              </div>
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteAllMessages()}
+                  disabled={deleteMessagesLoading}
+                  className="rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-xs font-bold uppercase tracking-wide text-red-900 disabled:opacity-60"
+                >
+                  Apagar todo histórico
+                </button>
+              </div>
+              {deleteMessagesFeedback && (
+                <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                  {deleteMessagesFeedback}
+                </p>
+              )}
+              {deleteMessagesError && (
+                <p className="mt-3 rounded-lg bg-error/10 px-3 py-2 text-xs text-error" role="alert">
+                  {deleteMessagesError}
+                </p>
+              )}
+            </div>
           </section>
 
           <section className="bg-surface-container-low relative overflow-hidden rounded-xl p-6">

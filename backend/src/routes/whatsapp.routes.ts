@@ -14,7 +14,7 @@ import {
   setMessagePersistenceEnabled,
   setWebhookConfig,
 } from '../services/instance.service';
-import { getMessageMediaForUser } from '../services/sentMessage.service';
+import { deleteConversationMessagesForUser, getMessageMediaForUser } from '../services/sentMessage.service';
 import { setWebhookBodySchema } from '../validation/webhook.schema';
 import type { IWhatsAppSessionService, WhatsAppIncomingMessageEvent } from '../whatsapp';
 
@@ -125,6 +125,18 @@ export function createWhatsAppRouter(
         limit: parsed.data.limit,
         beforeMessageId: parsed.data.beforeMessageId,
       });
+      res.json(result);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.delete('/conversations/:jid/messages', requireJwt, async (req, res, next) => {
+    try {
+      const userId = req.user!.id;
+      const instanceId = req.instance!.id;
+      const jid = toConversationJid(req.params.jid || '');
+      const result = await deleteConversationMessagesForUser(userId, instanceId, jid);
       res.json(result);
     } catch (e) {
       next(e);

@@ -2,8 +2,8 @@ import crypto from 'crypto';
 import mongoose from 'mongoose';
 import { AppError } from '../errors/AppError';
 import { ApiRequestLog } from '../models/ApiRequestLog';
-import { SentMessage } from '../models/SentMessage';
 import { WhatsAppInstance } from '../models/WhatsAppInstance';
+import { deleteAllMessagesForUser } from './sentMessage.service';
 
 export type WhatsAppInstanceListItem = {
   id: string;
@@ -371,7 +371,7 @@ export async function removeInstanceCascade(
   const instanceObjectId = new mongoose.Types.ObjectId(owned.id);
   const userObjectId = new mongoose.Types.ObjectId(userId);
 
-  await SentMessage.deleteMany({ userId: userObjectId, instanceId: instanceObjectId });
+  await deleteAllMessagesForUser(userId, owned.id);
   await ApiRequestLog.deleteMany({ userId: userObjectId, instanceId: instanceObjectId });
   await WhatsAppInstance.deleteOne({ _id: instanceObjectId, userId: userObjectId });
 
