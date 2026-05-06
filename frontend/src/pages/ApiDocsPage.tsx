@@ -517,7 +517,7 @@ Content-Type: application/json
           </p>
           <CodeBlock>{`type WhatsAppIncomingMessageEvent = {
   messageId: string;   // id da mensagem (Baileys)
-  from: string;        // JID do remetente, ex. "5511999999999@s.whatsapp.net"
+  from: string;        // número do remetente (só dígitos), ex. "5511999999999"
   to: string | null;  // pushName do contacto, se existir; senão null
   timestamp: string;   // data/hora em ISO 8601 (UTC)
   text: string;        // texto extraído (mensagem de texto)
@@ -531,7 +531,7 @@ Content-Type: application/json
           <p className="text-on-surface text-xs font-semibold">Exemplo (corpo exatamente enviado no webhook; idêntico no Socket)</p>
           <CodeBlock>{`{
   "messageId": "3EB0C767F26B1C0A0F8C",
-  "from": "5511999999999@s.whatsapp.net",
+  "from": "5511999999999",
   "to": "Nome do contacto",
   "timestamp": "2025-04-24T18:32:11.000Z",
   "text": "Olá, preciso de ajuda.",

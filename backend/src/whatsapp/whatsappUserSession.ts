@@ -50,6 +50,12 @@ function digitsOnly(phone: string): string {
   return phone.replace(/\D/g, '');
 }
 
+function normalizeSenderPhone(rawJid: string): string {
+  const userPart = rawJid.split('@')[0] ?? rawJid;
+  const digits = digitsOnly(userPart);
+  return digits || userPart;
+}
+
 function buildOtpMessage(code: string): string {
   return code;
 }
@@ -168,7 +174,7 @@ export class WhatsAppUserSession implements IWhatsAppSessionClient {
           const media = await this.extractIncomingMedia(msg);
           const payload: WhatsAppIncomingMessageEvent = {
             messageId: msg.key.id ?? `msg_${Date.now()}`,
-            from: remoteJid,
+            from: normalizeSenderPhone(remoteJid),
             to: msg.pushName ?? null,
             timestamp: new Date(
               (Number(msg.messageTimestamp ?? Math.floor(Date.now() / 1000)) || Math.floor(Date.now() / 1000)) *
