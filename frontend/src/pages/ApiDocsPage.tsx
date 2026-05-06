@@ -517,7 +517,7 @@ Content-Type: application/json
           </p>
           <CodeBlock>{`type WhatsAppIncomingMessageEvent = {
   messageId: string;   // id da mensagem (Baileys)
-  from: string;        // número do remetente (só dígitos), ex. "5511999999999"
+  from: string;        // telefone do remetente (só dígitos); quando não resolvível, retorna string vazia
   to: string | null;  // pushName do contacto, se existir; senão null
   timestamp: string;   // data/hora em ISO 8601 (UTC)
   text: string;        // texto extraído (mensagem de texto)
@@ -527,6 +527,10 @@ Content-Type: application/json
           <p className="text-outline text-xs">
             Só entram na fila de receção mensagens de conversa (não enviadas por si; o fluxo de envio de OTP usa outro
             endpoint).
+          </p>
+          <p className="text-outline text-xs">
+            Observação: quando o WhatsApp não expõe o telefone real do remetente, o campo{' '}
+            <code className="font-mono text-xs">from</code> é enviado como string vazia.
           </p>
           <p className="text-on-surface text-xs font-semibold">Exemplo (corpo exatamente enviado no webhook; idêntico no Socket)</p>
           <CodeBlock>{`{

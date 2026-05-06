@@ -50,10 +50,27 @@ function digitsOnly(phone: string): string {
   return phone.replace(/\D/g, '');
 }
 
-function normalizeSenderPhone(rawJid: string): string {
-  const userPart = rawJid.split('@')[0] ?? rawJid;
+function extractPhoneFromJid(rawJid: string): string | null {
+  const trimmed = rawJid.trim();
+  if (!trimmed.includes('@')) return null;
+  const [userPartRaw, domainRaw] = trimmed.split('@');
+  const userPart = (userPartRaw ?? '').split(':')[0] ?? '';
+  const domain = (domainRaw ?? '').toLowerCase();
+  if (domain !== 's.whatsapp.net' && domain !== 'c.us') {
+    return null;
+  }
   const digits = digitsOnly(userPart);
-  return digits || userPart;
+  if (digits.length < 8 || digits.length > 20) {
+    return null;
+  }
+  return digits;
+}
+
+function normalizeSenderForWebhook(rawJid: string): string {
+  const phone = extractPhoneFromJid(rawJid);
+  if (phone) return phone;
+  // Sem fallback para LID/ID interno: expõe apenas telefone real quando resolvível.
+  return '';
 }
 
 function buildOtpMessage(code: string): string {
@@ -174,7 +191,7 @@ export class WhatsAppUserSession implements IWhatsAppSessionClient {
           const media = await this.extractIncomingMedia(msg);
           const payload: WhatsAppIncomingMessageEvent = {
             messageId: msg.key.id ?? `msg_${Date.now()}`,
-            from: normalizeSenderPhone(remoteJid),
+            from: normalizeSenderForWebhook(remoteJid),
             to: msg.pushName ?? null,
             timestamp: new Date(
               (Number(msg.messageTimestamp ?? Math.floor(Date.now() / 1000)) || Math.floor(Date.now() / 1000)) *
