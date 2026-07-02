@@ -37,6 +37,19 @@
  *   - `beforeMessageId` opcional (cursor para paginação)
  * - 200: `{ items: WhatsAppConversationMessage[], nextCursor: string | null }`
  *
+ * ## GET /api/v1/instances/:instanceId/whatsapp/messages/:messageId/media
+ * - Auth: Bearer (JWT ou API key)
+ * - `:messageId` = ObjectId MongoDB do registo persistido (não o id Baileys)
+ * - 200: corpo binário (`Content-Type` / `Content-Disposition` conforme ficheiro gravado)
+ * - 400/404: id inválido ou mídia inexistente
+ *
+ * ## Webhook / Socket — WhatsAppIncomingMessageEvent (mensagem recebida)
+ * - Mesmo corpo no POST webhook e no evento `whatsapp.message.received`
+ * - Campos base: messageId, from, to, timestamp, text, userId, instanceId
+ * - `media` opcional: fileBuffer, mimeType, fileName, size (imagem, vídeo, documento)
+ * - Áudio/nota de voz ainda não incluído em `media`
+ * - Webhook serializa fileBuffer como `{ type: 'Buffer', data: number[] }`
+ *
  * ## POST /api/v1/auth/instances/:instanceId/send-code
  * - Auth: Bearer
  * - Body: `{ phoneNumber, message }` (validação zod existente)

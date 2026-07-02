@@ -100,6 +100,11 @@ export function ApiDocsPage() {
                 </a>
               </li>
               <li>
+                <a href="#message-media" className="text-primary hover:underline">
+                  Download de mídia (REST)
+                </a>
+              </li>
+              <li>
                 <a href="#send-code" className="text-primary hover:underline">
                   Envio de mensagem
                 </a>
@@ -406,10 +411,73 @@ Authorization: Bearer <token>
             conectada.
           </p>
           <p className="text-outline mt-2 text-xs">
-            Para mensagens com arquivo, a resposta pode incluir <code className="font-mono text-xs">mediaUrl</code>,{' '}
+            Para mensagens com arquivo <strong>persistidas</strong> (histórico salvo no servidor), cada item pode incluir{' '}
+            <code className="font-mono text-xs">mediaUrl</code> (caminho relativo à API — use com o mesmo Bearer),{' '}
             <code className="font-mono text-xs">mediaMimeType</code>,{' '}
             <code className="font-mono text-xs">mediaFileName</code> e{' '}
-            <code className="font-mono text-xs">mediaSize</code>.
+            <code className="font-mono text-xs">mediaSize</code>. Detalhes em{' '}
+            <a href="#message-media" className="text-primary font-medium underline-offset-2 hover:underline">
+              Download de mídia (REST)
+            </a>
+            .
+          </p>
+          <CodeBlock>{`# Exemplo de item com mídia na listagem
+# {
+#   "id": "3EB0C767F26B1C0A0F8C",
+#   "jid": "5511999999999@s.whatsapp.net",
+#   "fromMe": false,
+#   "timestamp": "2026-05-05T10:12:00.000Z",
+#   "text": "Segue o contrato.",
+#   "type": "media",
+#   "mediaUrl": "/api/v1/instances/<instanceId>/whatsapp/messages/<mongoId>/media",
+#   "mediaMimeType": "application/pdf",
+#   "mediaFileName": "contrato.pdf",
+#   "mediaSize": 245760
+# }`}</CodeBlock>
+          <p className="text-outline text-xs">
+            O campo <code className="font-mono text-xs">id</code> pode ser o identificador do WhatsApp (Baileys) ou o
+            id interno, conforme o registo. Para baixar o ficheiro, use sempre o URL completo em{' '}
+            <code className="font-mono text-xs">mediaUrl</code> (contém o id MongoDB da mensagem persistida).
+          </p>
+        </Section>
+
+        <Section id="message-media" title="Download de mídia (REST)">
+          <p>
+            <strong>Endpoint:</strong>{' '}
+            <code className="font-mono text-xs">
+              GET /api/v1/instances/&lt;instanceId&gt;/whatsapp/messages/&lt;messageId&gt;/media
+            </code>
+            . Autenticação:{' '}
+            <code className="font-mono text-xs">Authorization: Bearer &lt;JWT de sessão ou chave de API otp_…&gt;</code>.
+          </p>
+          <p>
+            O <code className="font-mono text-xs">messageId</code> no path é o <strong>ObjectId MongoDB</strong> do
+            registo persistido (não confundir com <code className="font-mono text-xs">messageId</code> do WhatsApp no
+            webhook). O caminho mais simples é concatenar a base da API com o valor de{' '}
+            <code className="font-mono text-xs">mediaUrl</code> devolvido na{' '}
+            <a href="#conversation-messages" className="text-primary font-medium underline-offset-2 hover:underline">
+              listagem de mensagens
+            </a>
+            .
+          </p>
+          <p>
+            Resposta <strong>200</strong>: corpo binário do arquivo com{' '}
+            <code className="font-mono text-xs">Content-Type</code> e{' '}
+            <code className="font-mono text-xs">Content-Disposition: inline</code> conforme o tipo/nome gravados.
+            Erros: <strong>400</strong> (id inválido), <strong>404</strong> (sem mídia ou arquivo ausente no disco).
+          </p>
+          <CodeBlock>{`GET ${base}/api/v1/instances/<instanceId>/whatsapp/messages/<mongoId>/media
+Authorization: Bearer <token>
+
+# Resposta 200: bytes do arquivo (ex.: application/pdf, image/jpeg)`}</CodeBlock>
+          <p className="text-outline text-xs">
+            Só existem ficheiros para mensagens recebidas/enviadas com mídia e com{' '}
+            <strong>persistência de mensagens</strong> activa na instância. Mensagens em tempo real via webhook/socket
+            trazem o binário inline no payload (ver{' '}
+            <a href="#incoming-payload" className="text-primary font-medium underline-offset-2 hover:underline">
+              Payload: mensagem recebida
+            </a>
+            ); este endpoint serve para recuperar ficheiros já gravados no histórico.
           </p>
         </Section>
 
@@ -491,7 +559,9 @@ Content-Type: application/json
           </p>
           <p className="text-outline text-xs">
             Limite atual de tamanho: 16MB por arquivo. O envio usa a mesma autenticação Bearer (JWT ou chave
-            <code className="font-mono"> otp_…</code>) e a mesma verificação de sessão conectada.
+            <code className="font-mono"> otp_…</code>) e a mesma verificação de sessão conectada. O arquivo é enviado
+            como <strong>documento</strong> no WhatsApp (não como nota de voz nativa). Não há evento socket de confirmação
+            de envio — apenas a resposta HTTP.
           </p>
           <CodeBlock>{`curl -X POST "${base}/api/v1/auth/instances/<instanceId>/send-media" \\
   -H "Authorization: Bearer <token>" \\
@@ -516,23 +586,51 @@ Content-Type: application/json
             <code className="font-mono text-xs"> TypeScript</code> é:
           </p>
           <CodeBlock>{`type WhatsAppIncomingMessageEvent = {
-  messageId: string;   // id da mensagem (Baileys)
-  from: string;        // telefone do remetente (só dígitos); quando não resolvível, retorna string vazia
-  to: string | null;  // pushName do contacto, se existir; senão null
+  messageId: string;   // id da mensagem no WhatsApp (Baileys)
+  from: string;        // telefone do remetente (só dígitos); vazio se não resolvível
+  to: string | null;   // pushName do contacto, se existir; senão null
   timestamp: string;   // data/hora em ISO 8601 (UTC)
-  text: string;        // texto extraído (mensagem de texto)
+  text: string;        // texto ou legenda (caption), quando existir
   userId: string;      // id do utilizador (conta) no painel
   instanceId: string;  // id da instância WhatsApp desta ligação
+  media?: {            // opcional — presente quando o servidor baixou a mídia com sucesso
+    fileBuffer?: Buffer | { type: 'Buffer'; data: number[] };
+    mimeType?: string;
+    fileName?: string;
+    size?: number;
+  };
 };`}</CodeBlock>
           <p className="text-outline text-xs">
-            Só entram na fila de receção mensagens de conversa (não enviadas por si; o fluxo de envio de OTP usa outro
-            endpoint).
+            Só entram na fila de receção mensagens de conversa (não enviadas por si; o fluxo de envio usa outros
+            endpoints). Com <strong>persistência activa</strong>, o servidor também grava a mensagem e o ficheiro em
+            disco para consulta posterior via REST (
+            <a href="#message-media" className="text-primary font-medium underline-offset-2 hover:underline">
+              Download de mídia
+            </a>
+            ).
           </p>
           <p className="text-outline text-xs">
             Observação: quando o WhatsApp não expõe o telefone real do remetente, o campo{' '}
             <code className="font-mono text-xs">from</code> é enviado como string vazia.
           </p>
-          <p className="text-on-surface text-xs font-semibold">Exemplo (corpo exatamente enviado no webhook; idêntico no Socket)</p>
+          <p className="text-on-surface text-xs font-semibold">Mídia recebida (webhook e socket)</p>
+          <p className="text-outline text-xs">
+            Imagem, vídeo e documento (PDF, DOC, etc.) são descarregados pelo servidor e incluídos em{' '}
+            <code className="font-mono text-xs">media</code> no <strong>mesmo payload</strong> enviado pelo webhook e
+            pelo evento socket <code className="font-mono text-xs">whatsapp.message.received</code>.{' '}
+            <strong>Notas de voz/áudio</strong> (<code className="font-mono text-xs">audioMessage</code>) ainda{' '}
+            <strong>não</strong> são descarregadas — o evento chega sem <code className="font-mono text-xs">media</code>{' '}
+            e com <code className="font-mono text-xs">text</code> vazio.
+          </p>
+          <p className="text-outline text-xs">
+            No <strong>webhook</strong>, <code className="font-mono text-xs">fileBuffer</code> serializa em JSON como{' '}
+            <code className="font-mono text-xs">&#123; &quot;type&quot;: &quot;Buffer&quot;, &quot;data&quot;: [ …bytes ] &#125;</code>.
+            No <strong>Socket.IO</strong>, o cliente pode receber <code className="font-mono text-xs">Uint8Array</code>{' '}
+            ou estrutura equivalente — reconstrua o buffer antes de gravar o ficheiro. Este payload{' '}
+            <strong>não inclui</strong> <code className="font-mono text-xs">mediaUrl</code>; use o binário inline ou,
+            depois de persistido, o endpoint REST de download.
+          </p>
+          <p className="text-on-surface text-xs font-semibold">Exemplo — mensagem de texto</p>
           <CodeBlock>{`{
   "messageId": "3EB0C767F26B1C0A0F8C",
   "from": "5511999999999",
@@ -541,6 +639,22 @@ Content-Type: application/json
   "text": "Olá, preciso de ajuda.",
   "userId": "65a1b2c3d4e5f6789abcdef0",
   "instanceId": "65a1b2c3d4e5f6789abcdef1"
+}`}</CodeBlock>
+          <p className="text-on-surface text-xs font-semibold">Exemplo — documento recebido (webhook; socket usa a mesma forma, buffer pode variar)</p>
+          <CodeBlock>{`{
+  "messageId": "3EB0C767F26B1C0A0F8D",
+  "from": "5511999999999",
+  "to": "Nome do contacto",
+  "timestamp": "2025-04-24T18:35:00.000Z",
+  "text": "Segue o contrato assinado.",
+  "userId": "65a1b2c3d4e5f6789abcdef0",
+  "instanceId": "65a1b2c3d4e5f6789abcdef1",
+  "media": {
+    "fileBuffer": { "type": "Buffer", "data": [37, 80, 68, 70, 45, 49, 46, 52] },
+    "mimeType": "application/pdf",
+    "fileName": "contrato.pdf",
+    "size": 245760
+  }
 }`}</CodeBlock>
         </Section>
 
@@ -581,7 +695,9 @@ Authorization: Bearer <jwt-sessao>
               Payload: mensagem recebida
             </a>
             . O cabeçalho <code className="font-mono text-xs">X-Webhook-Signature: sha256=&lt;hex&gt;</code> contém
-            HMAC-SHA256 do corpo <strong>em UTF-8 exatamente como enviado</strong>, com o segredo da instância. Em
+            HMAC-SHA256 do corpo <strong>em UTF-8 exatamente como enviado</strong>, com o segredo da instância. Mensagens
+            com ficheiro incluem <code className="font-mono text-xs">media.fileBuffer</code> no JSON (array de bytes) — o
+            corpo pode ser grande; valide a assinatura antes de processar. Em
             produção a URL deve ser <code className="font-mono text-xs">https://</code>; <code className="font-mono text-xs">http://</code> em
             produção só com <code className="font-mono text-xs">WEBHOOK_INSECURE_HTTP=1</code> no servidor.
           </p>
@@ -612,16 +728,29 @@ socket.emit(
 
 socket.on('whatsapp.message.received', (payload) => {
   // payload: WhatsAppIncomingMessageEvent — ver secção "Payload: mensagem recebida"
+  // Com mídia (imagem/vídeo/documento), payload.media traz fileBuffer + mimeType + fileName
+  if (payload.media?.fileBuffer) {
+    const bytes =
+      payload.media.fileBuffer instanceof Uint8Array
+        ? payload.media.fileBuffer
+        : Buffer.from(payload.media.fileBuffer.data ?? []);
+    console.log('Mídia recebida:', payload.media.fileName, bytes.length, 'bytes');
+  }
   console.log(payload);
 });`}</CodeBlock>
           <p>
-            Eventos principais: <code className="font-mono text-xs">whatsapp.message.send</code> e{' '}
-            <code className="font-mono text-xs">whatsapp.message.received</code> — a forma de{' '}
+            Eventos principais: <code className="font-mono text-xs">whatsapp.message.send</code> (só texto) e{' '}
+            <code className="font-mono text-xs">whatsapp.message.received</code> (texto e mídia recebida). A forma de{' '}
             <code className="font-mono text-xs">whatsapp.message.received</code> é a descrita em{' '}
             <a href="#incoming-payload" className="text-primary font-medium underline-offset-2 hover:underline">
               Payload: mensagem recebida
             </a>
-            .
+            , incluindo o campo opcional <code className="font-mono text-xs">media</code> com o binário inline. Para
+            ficheiros já persistidos no histórico, prefira <code className="font-mono text-xs">mediaUrl</code> via REST (
+            <a href="#message-media" className="text-primary font-medium underline-offset-2 hover:underline">
+              Download de mídia
+            </a>
+            ).
           </p>
         </Section>
 
