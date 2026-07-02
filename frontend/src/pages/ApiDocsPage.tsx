@@ -95,6 +95,11 @@ export function ApiDocsPage() {
                 </a>
               </li>
               <li>
+                <a href="#profile-photos" className="text-primary hover:underline">
+                  Fotos de perfil (REST)
+                </a>
+              </li>
+              <li>
                 <a href="#conversation-messages" className="text-primary hover:underline">
                   Mensagens por conversa (REST)
                 </a>
@@ -256,8 +261,10 @@ POST ${base}/api/v1/instances/<instanceId>/whatsapp/pairing/start
 GET  ${base}/api/v1/instances/<instanceId>/whatsapp/status
 GET  ${base}/api/v1/instances/<instanceId>/whatsapp/qr
 GET  ${base}/api/v1/instances/<instanceId>/whatsapp/contacts[?filter=named|all]
+GET  ${base}/api/v1/instances/<instanceId>/whatsapp/contacts/<jid>/profile-photo
 
-# Atualizar foto de perfil (JWT apenas, multipart)
+# Foto da conta conectada (JWT apenas)
+GET  ${base}/api/v1/instances/<instanceId>/whatsapp/profile-photo
 PUT  ${base}/api/v1/instances/<instanceId>/whatsapp/profile-photo
 Content-Type: multipart/form-data (campo: photo)`}</CodeBlock>
         </Section>
@@ -298,10 +305,11 @@ Content-Type: multipart/form-data (campo: photo)`}</CodeBlock>
             ).
           </p>
           <p>
-            Para trocar a foto da conta conectada, use{' '}
-            <code className="font-mono text-xs">PUT …/whatsapp/profile-photo</code> com token de sessão (JWT) e upload{' '}
-            <code className="font-mono text-xs">multipart/form-data</code> no campo{' '}
-            <code className="font-mono text-xs">photo</code> (JPG/PNG/WEBP até 2MB).
+            Para fotos de perfil (conta conectada ou contactos), ver{' '}
+            <a href="#profile-photos" className="text-primary font-medium underline-offset-2 hover:underline">
+              Fotos de perfil (REST)
+            </a>
+            .
           </p>
           <CodeBlock>{`# Exemplo: iniciar e acompanhar (ajuste <instanceId> e o token)
 export API_BASE='${base}'
@@ -363,6 +371,86 @@ curl -sS -H "Authorization: Bearer $TOKEN" \\
   "$API_BASE/api/v1/instances/$INST/whatsapp/contacts?filter=all"
 
 # Resposta exemplo: { "items": [ { "jid": "...", "name": "...", "phone": "...", "notify": "..." } ] }`}</CodeBlock>
+          <p className="text-outline text-xs">
+            A listagem <strong>não inclui</strong> foto de perfil. Para obter a URL da foto de um contacto ou grupo, use{' '}
+            <a href="#profile-photos" className="text-primary font-medium underline-offset-2 hover:underline">
+              Fotos de perfil (REST)
+            </a>
+            .
+          </p>
+        </Section>
+
+        <Section id="profile-photos" title="Fotos de perfil (REST)">
+          <p>
+            O servidor consulta o WhatsApp em tempo real via Baileys e devolve uma <strong>URL temporária</strong> (
+            <code className="font-mono text-xs">pps.whatsapp.net</code>). A imagem <strong>não é gravada</strong> no
+            disco nem no MongoDB — use a URL logo no seu cliente (ex.: <code className="font-mono text-xs">&lt;img src=&#123;url&#125; /&gt;</code>
+            ). Em todos os casos a sessão da instância tem de estar conectada (
+            <code className="font-mono text-xs">whatsappReady: true</code>).
+          </p>
+          <p>
+            Tipo de resposta comum ao consultar foto:
+          </p>
+          <CodeBlock>{`type WhatsAppProfilePhotoBody = {
+  url: string | null; // null = sem foto ou privacidade impede a consulta
+};`}</CodeBlock>
+
+          <p className="text-on-surface text-xs font-semibold">Conta conectada (própria instância)</p>
+          <p>
+            Consultar ou alterar a foto da <strong>conta WhatsApp ligada</strong> à instância. Autenticação:{' '}
+            <strong>JWT de sessão apenas</strong> (não aceita chave de API).
+          </p>
+          <CodeBlock>{`# Consultar foto atual
+GET ${base}/api/v1/instances/<instanceId>/whatsapp/profile-photo
+Authorization: Bearer <jwt-sessao>
+
+# Resposta 200: { "url": "https://pps.whatsapp.net/v/..." }
+
+# Atualizar foto (JPG, PNG ou WEBP até 2MB)
+PUT ${base}/api/v1/instances/<instanceId>/whatsapp/profile-photo
+Authorization: Bearer <jwt-sessao>
+Content-Type: multipart/form-data
+
+# campo multipart: photo=<arquivo>
+
+# Resposta 200: { "ok": true }`}</CodeBlock>
+
+          <p className="text-on-surface mt-4 text-xs font-semibold">Contacto ou grupo</p>
+          <p>
+            <strong>Endpoint:</strong>{' '}
+            <code className="font-mono text-xs">
+              GET /api/v1/instances/&lt;instanceId&gt;/whatsapp/contacts/&lt;jid&gt;/profile-photo
+            </code>
+            . Autenticação: <code className="font-mono text-xs">Authorization: Bearer &lt;JWT ou chave de API otp_…&gt;</code>.
+          </p>
+          <p>
+            No parâmetro <code className="font-mono text-xs">:jid</code>, use o telefone (ex.{' '}
+            <code className="font-mono text-xs">5511999999999</code>), JID de utilizador (
+            <code className="font-mono text-xs">5511999999999@s.whatsapp.net</code>) ou JID de grupo (
+            <code className="font-mono text-xs">123456789-123345@g.us</code>).
+          </p>
+          <p className="text-outline text-xs">
+            Erros: <strong>400</strong> (JID inválido), <strong>503</strong> (sessão não conectada ou falha na consulta
+            ao WhatsApp).
+          </p>
+          <CodeBlock>{`# Foto de perfil de um contacto pelo telefone
+GET ${base}/api/v1/instances/<instanceId>/whatsapp/contacts/5511999999999/profile-photo
+Authorization: Bearer <token>
+
+# Foto de um grupo
+GET ${base}/api/v1/instances/<instanceId>/whatsapp/contacts/123456789-123345@g.us/profile-photo
+Authorization: Bearer <token>
+
+# Resposta 200 (exemplo)
+# { "url": "https://pps.whatsapp.net/v/..." }
+
+# Sem foto ou privacidade restrita
+# { "url": null }`}</CodeBlock>
+          <p className="text-outline text-xs">
+            Fluxo típico: (1) <code className="font-mono text-xs">GET …/contacts</code> para obter o{' '}
+            <code className="font-mono text-xs">jid</code> ou <code className="font-mono text-xs">phone</code>; (2) chamar
+            este endpoint por contacto quando precisar exibir o avatar. Não há batch — uma chamada por JID.
+          </p>
         </Section>
 
         <Section id="conversation-messages" title="Mensagens por conversa (REST)">
@@ -615,12 +703,14 @@ Content-Type: application/json
           </p>
           <p className="text-on-surface text-xs font-semibold">Mídia recebida (webhook e socket)</p>
           <p className="text-outline text-xs">
-            Imagem, vídeo e documento (PDF, DOC, etc.) são descarregados pelo servidor e incluídos em{' '}
+            Imagem, vídeo, documento (PDF, DOC, etc.) e <strong>áudio/notas de voz</strong> (
+            <code className="font-mono text-xs">audioMessage</code>) são descarregados pelo servidor e incluídos em{' '}
             <code className="font-mono text-xs">media</code> no <strong>mesmo payload</strong> enviado pelo webhook e
-            pelo evento socket <code className="font-mono text-xs">whatsapp.message.received</code>.{' '}
-            <strong>Notas de voz/áudio</strong> (<code className="font-mono text-xs">audioMessage</code>) ainda{' '}
-            <strong>não</strong> são descarregadas — o evento chega sem <code className="font-mono text-xs">media</code>{' '}
-            e com <code className="font-mono text-xs">text</code> vazio.
+            pelo evento socket <code className="font-mono text-xs">whatsapp.message.received</code>. Notas de voz
+            costumam vir com <code className="font-mono text-xs">text</code> vazio,{' '}
+            <code className="font-mono text-xs">mimeType</code> em Ogg/Opus e{' '}
+            <code className="font-mono text-xs">fileName</code> como <code className="font-mono text-xs">voice-note.ogg</code>.
+            Se o download falhar, o evento pode chegar sem <code className="font-mono text-xs">media.fileBuffer</code>.
           </p>
           <p className="text-outline text-xs">
             No <strong>webhook</strong>, <code className="font-mono text-xs">fileBuffer</code> serializa em JSON como{' '}
@@ -654,6 +744,22 @@ Content-Type: application/json
     "mimeType": "application/pdf",
     "fileName": "contrato.pdf",
     "size": 245760
+  }
+}`}</CodeBlock>
+          <p className="text-on-surface text-xs font-semibold">Exemplo — nota de voz recebida (webhook; socket usa a mesma forma)</p>
+          <CodeBlock>{`{
+  "messageId": "3EB0C767F26B1C0A0F8E",
+  "from": "5511999999999",
+  "to": "Nome do contacto",
+  "timestamp": "2025-04-24T18:40:00.000Z",
+  "text": "",
+  "userId": "65a1b2c3d4e5f6789abcdef0",
+  "instanceId": "65a1b2c3d4e5f6789abcdef1",
+  "media": {
+    "fileBuffer": { "type": "Buffer", "data": [79, 103, 103, 83] },
+    "mimeType": "audio/ogg; codecs=opus",
+    "fileName": "voice-note.ogg",
+    "size": 18432
   }
 }`}</CodeBlock>
         </Section>
@@ -728,7 +834,7 @@ socket.emit(
 
 socket.on('whatsapp.message.received', (payload) => {
   // payload: WhatsAppIncomingMessageEvent — ver secção "Payload: mensagem recebida"
-  // Com mídia (imagem/vídeo/documento), payload.media traz fileBuffer + mimeType + fileName
+  // Com mídia (imagem/vídeo/documento/áudio), payload.media traz fileBuffer + mimeType + fileName
   if (payload.media?.fileBuffer) {
     const bytes =
       payload.media.fileBuffer instanceof Uint8Array
@@ -740,7 +846,7 @@ socket.on('whatsapp.message.received', (payload) => {
 });`}</CodeBlock>
           <p>
             Eventos principais: <code className="font-mono text-xs">whatsapp.message.send</code> (só texto) e{' '}
-            <code className="font-mono text-xs">whatsapp.message.received</code> (texto e mídia recebida). A forma de{' '}
+            <code className="font-mono text-xs">whatsapp.message.received</code> (texto e mídia recebida, incluindo notas de voz). A forma de{' '}
             <code className="font-mono text-xs">whatsapp.message.received</code> é a descrita em{' '}
             <a href="#incoming-payload" className="text-primary font-medium underline-offset-2 hover:underline">
               Payload: mensagem recebida

@@ -204,6 +204,21 @@ export class WhatsAppSessionService implements IWhatsAppSessionService {
     return session.getProfilePhotoUrl();
   }
 
+  async getContactProfilePhotoUrl(
+    userId: string,
+    instanceId: string,
+    jid: string
+  ): Promise<string | null> {
+    const session = this.sessions.get(this.sessionKey(userId, instanceId));
+    if (!session) {
+      throw new AppError(
+        'WhatsApp não iniciado. Use o painel para conectar (Gerar QR) antes de consultar a foto.',
+        503
+      );
+    }
+    return session.getContactProfilePhotoUrl(jid);
+  }
+
   async sendOtp(userId: string, instanceId: string, phoneNumber: string, code: string): Promise<void> {
     const session = this.sessions.get(this.sessionKey(userId, instanceId));
     if (!session) {

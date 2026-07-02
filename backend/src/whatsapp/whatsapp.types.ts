@@ -21,7 +21,7 @@
  *
  * ## GET /api/v1/instances/:instanceId/whatsapp/profile-photo
  * - Auth: Bearer JWT (sessão do painel)
- * - 200: `{ url: string | null }`
+ * - 200: `{ url: string | null }` — URL temporária WhatsApp da conta conectada
  *
  * ## GET /api/v1/instances/:instanceId/whatsapp/contacts
  * - Auth: Bearer (JWT ou API key)
@@ -29,6 +29,13 @@
  *   não vazio; `all` todos os contactos utilizador persistidos para a instância.
  * - 200: `{ items: WhatsAppContact[] }` — sincronizados pela sessão Baileys;
  *   `named` ordenado por nome ASC; `all` por nome e JID. Lista vazia até haver dados.
+ *   Não inclui foto de perfil; use `GET …/contacts/:jid/profile-photo` por contacto.
+ *
+ * ## GET /api/v1/instances/:instanceId/whatsapp/contacts/:jid/profile-photo
+ * - Auth: Bearer (JWT ou API key)
+ * - `:jid` = telefone (ex. `5511999999999`) ou JID (`@s.whatsapp.net`, `@g.us`)
+ * - 200: `{ url: string | null }` — URL temporária do WhatsApp; `null` se sem foto ou privacidade
+ * - 400: JID inválido; 503: sessão não pronta
  *
  * ## GET /api/v1/instances/:instanceId/whatsapp/conversations/:jid/messages
  * - Auth: Bearer (JWT ou API key)
@@ -46,8 +53,8 @@
  * ## Webhook / Socket — WhatsAppIncomingMessageEvent (mensagem recebida)
  * - Mesmo corpo no POST webhook e no evento `whatsapp.message.received`
  * - Campos base: messageId, from, to, timestamp, text, userId, instanceId
- * - `media` opcional: fileBuffer, mimeType, fileName, size (imagem, vídeo, documento)
- * - Áudio/nota de voz ainda não incluído em `media`
+ * - `media` opcional: fileBuffer, mimeType, fileName, size (imagem, vídeo, documento, áudio/nota de voz)
+ * - Notas de voz (`audioMessage`/`ptt`): `fileName` típico `voice-note.ogg`, `mimeType` frequentemente `audio/ogg; codecs=opus`
  * - Webhook serializa fileBuffer como `{ type: 'Buffer', data: number[] }`
  *
  * ## POST /api/v1/auth/instances/:instanceId/send-code
@@ -157,6 +164,7 @@ export interface IWhatsAppSessionService {
     mimeType: string
   ): Promise<void>;
   getProfilePhotoUrl(userId: string, instanceId: string): Promise<string | null>;
+  getContactProfilePhotoUrl(userId: string, instanceId: string, jid: string): Promise<string | null>;
   /** Cota (plano grátis) e registo de sucesso em histórico aplicam-se aqui. */
   sendOtp(userId: string, instanceId: string, phoneNumber: string, code: string): Promise<void>;
   /** Envio de arquivo/documento para um número WhatsApp. */

@@ -488,6 +488,34 @@ export async function fetchWhatsAppContactsForInstance(
   return (data as WhatsAppContactsResponse).items ?? [];
 }
 
+/** Foto de perfil de um contacto/grupo (URL temporária do WhatsApp). `jid` = telefone ou JID completo. */
+export async function fetchWhatsAppContactProfilePhotoForInstance(
+  instanceId: string,
+  jid: string
+): Promise<WhatsAppProfilePhotoResponse> {
+  const encodedJid = encodeURIComponent(jid.trim());
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/instances/${encodeURIComponent(instanceId)}/whatsapp/contacts/${encodedJid}/profile-photo`
+    ),
+    {
+      headers: authHeaders(),
+      cache: 'no-store',
+    }
+  );
+  redirectLoginIfUnauthorized(res);
+  const data = (await res.json().catch(() => ({}))) as WhatsAppProfilePhotoResponse | ApiErrorBody;
+  if (!res.ok) {
+    const err = data as ApiErrorBody;
+    const msg = err.error ?? `Erro HTTP ${res.status}`;
+    const e = new Error(msg) as Error & { status: number; details?: unknown };
+    e.status = res.status;
+    e.details = err.details;
+    throw e;
+  }
+  return data as WhatsAppProfilePhotoResponse;
+}
+
 export async function logoutWhatsApp(): Promise<WhatsAppLogoutResponse> {
   throw new Error('logoutWhatsApp requer instanceId');
 }

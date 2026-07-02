@@ -87,6 +87,10 @@ function toMainUserJid(fullJid: string | undefined): string | null {
   return `${user}@s.whatsapp.net`;
 }
 
+function isProfilePhotoNotFoundError(message: string): boolean {
+  return /404|not[\s-]?found|no profile picture|item-not-found/i.test(message);
+}
+
 /**
  * Uma sessão [Baileys](https://github.com/WhiskeySockets/Baileys) por utilizador do painel (sem Puppeteer).
  */
@@ -543,16 +547,38 @@ export class WhatsAppUserSession implements IWhatsAppSessionClient {
     if (!ownJid) {
       throw new AppError('Não foi possível identificar a conta WhatsApp conectada.', 503);
     }
+    return this.fetchProfilePhotoUrlForJid(ownJid, 'conta conectada');
+  }
+
+  async getContactProfilePhotoUrl(jid: string): Promise<string | null> {
+    if (!this.ready || !this.sock) {
+      throw new AppError(
+        'Serviço WhatsApp indisponível. Aguarde a conexão ou escaneie o QR code no painel.',
+        503
+      );
+    }
+    return this.fetchProfilePhotoUrlForJid(jid, 'contacto');
+  }
+
+  private async fetchProfilePhotoUrlForJid(
+    jid: string,
+    context: 'conta conectada' | 'contacto'
+  ): Promise<string | null> {
+    if (!this.sock) {
+      throw new AppError(
+        'Serviço WhatsApp indisponível. Aguarde a conexão ou escaneie o QR code no painel.',
+        503
+      );
+    }
     try {
-      const url = await this.sock.profilePictureUrl(ownJid, 'image');
+      const url = await this.sock.profilePictureUrl(jid, 'image');
       return url ?? null;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      // Quando não existe foto definida, o Baileys pode responder com erro de recurso ausente.
-      if (/404|not[\s-]?found|no profile picture/i.test(message)) {
+      if (isProfilePhotoNotFoundError(message)) {
         return null;
       }
-      this.log.error({ err: message }, 'WhatsApp: falha ao consultar foto de perfil');
+      this.log.error({ err: message, jid, context }, 'WhatsApp: falha ao consultar foto de perfil');
       throw new AppError('Não foi possível consultar a foto de perfil do WhatsApp.', 503);
     }
   }
@@ -627,12 +653,38 @@ export class WhatsAppUserSession implements IWhatsAppSessionClient {
         size: typeof document.fileLength === 'number' ? document.fileLength : undefined,
       };
     }
+    const audio = m.audioMessage as
+      | { mimetype?: unknown; fileLength?: unknown; ptt?: unknown }
+      | undefined;
+    if (audio) {
+      const mimeType =
+        typeof audio.mimetype === 'string' && audio.mimetype.trim().length > 0
+          ? audio.mimetype
+          : 'audio/ogg; codecs=opus';
+      const downloaded = await this.tryDownloadIncomingMedia(msg, 'audio');
+      return {
+        fileBuffer: downloaded,
+        mimeType,
+        fileName: this.incomingAudioFileName(mimeType, Boolean(audio.ptt)),
+        size: typeof audio.fileLength === 'number' ? audio.fileLength : undefined,
+      };
+    }
     return undefined;
+  }
+
+  private incomingAudioFileName(mimeType: string, isVoiceNote: boolean): string {
+    const lower = mimeType.toLowerCase();
+    let ext = 'ogg';
+    if (lower.includes('mpeg') || lower.includes('mp3')) ext = 'mp3';
+    else if (lower.includes('m4a') || lower.includes('mp4')) ext = 'm4a';
+    else if (lower.includes('wav')) ext = 'wav';
+    const base = isVoiceNote ? 'voice-note' : 'audio';
+    return `${base}.${ext}`;
   }
 
   private async tryDownloadIncomingMedia(
     msg: proto.IWebMessageInfo,
-    mediaType: 'image' | 'video' | 'document'
+    mediaType: 'image' | 'video' | 'document' | 'audio'
   ): Promise<Buffer | undefined> {
     if (!this.sock) return undefined;
     try {

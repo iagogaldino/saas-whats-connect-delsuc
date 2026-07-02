@@ -59,6 +59,9 @@ Na primeira vez, escaneie o QR code exibido no terminal com o WhatsApp no celula
 - `GET /api/v1/instances/:instanceId/whatsapp/qr`
 - `GET /api/v1/instances/:instanceId/whatsapp/conversations/:jid/messages?limit=20&beforeMessageId=<cursor>` (`:jid` pode ser só número)
 - `DELETE /api/v1/instances/:instanceId/whatsapp/conversations/:jid/messages` (JWT; remove histórico de um contato + mídias)
+- `GET /api/v1/instances/:instanceId/whatsapp/contacts[?filter=named|all]`
+- `GET /api/v1/instances/:instanceId/whatsapp/contacts/:jid/profile-photo` (URL temporária; `:jid` = telefone ou JID)
+- `GET /api/v1/instances/:instanceId/whatsapp/profile-photo` (JWT; foto da conta conectada)
 - `PUT /api/v1/instances/:instanceId/whatsapp/profile-photo` (JWT + multipart `photo`)
 - `POST /api/v1/instances/:instanceId/whatsapp/logout`
 - `POST /api/v1/auth/instances/:instanceId/send-code`

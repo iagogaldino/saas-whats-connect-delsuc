@@ -112,6 +112,18 @@ export function createWhatsAppRouter(
     }
   });
 
+  router.get('/contacts/:jid/profile-photo', async (req, res, next) => {
+    try {
+      const userId = req.user!.id;
+      const instanceId = req.instance!.id;
+      const jid = toConversationJid(req.params.jid || '');
+      const url = await manager.getContactProfilePhotoUrl(userId, instanceId, jid);
+      res.status(200).json({ url });
+    } catch (e) {
+      next(e);
+    }
+  });
+
   router.get('/conversations/:jid/messages', async (req, res, next) => {
     try {
       const parsed = conversationMessagesQuerySchema.safeParse(req.query);
