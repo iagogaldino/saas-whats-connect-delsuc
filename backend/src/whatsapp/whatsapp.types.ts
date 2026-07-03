@@ -53,6 +53,8 @@
  * ## Webhook / Socket — WhatsAppIncomingMessageEvent (mensagem recebida)
  * - Mesmo corpo no POST webhook e no evento `whatsapp.message.received`
  * - Campos base: messageId, from, to, timestamp, text, userId, instanceId
+ * - `isGroup`, `chatJid`, `senderJid` — tipo de conversa e JIDs Baileys (grupo vs contacto)
+ * - `reply` opcional — quando a mensagem é resposta a outra (`quotedMessageId`, etc.)
  * - `media` opcional: fileBuffer, mimeType, fileName, size (imagem, vídeo, documento, áudio/nota de voz)
  * - Notas de voz (`audioMessage`/`ptt`): `fileName` típico `voice-note.ogg`, `mimeType` frequentemente `audio/ogg; codecs=opus`
  * - Webhook serializa fileBuffer como `{ type: 'Buffer', data: number[] }`
@@ -109,6 +111,13 @@ export type WhatsAppContactsBody = {
   items: WhatsAppContact[];
 };
 
+export type WhatsAppIncomingMessageReply = {
+  quotedMessageId: string;
+  quotedParticipant: string | null;
+  quotedText: string;
+  quotedType: string;
+};
+
 export type WhatsAppIncomingMessageEvent = {
   messageId: string;
   from: string;
@@ -117,6 +126,10 @@ export type WhatsAppIncomingMessageEvent = {
   text: string;
   userId: string;
   instanceId: string;
+  isGroup: boolean;
+  chatJid: string;
+  senderJid: string;
+  reply?: WhatsAppIncomingMessageReply;
   media?: {
     fileBuffer?: Buffer;
     mimeType?: string;
@@ -132,6 +145,10 @@ export type WhatsAppConversationMessage = {
   timestamp: string;
   text: string;
   type: string;
+  isGroup?: boolean;
+  chatJid?: string;
+  senderJid?: string;
+  reply?: WhatsAppIncomingMessageReply;
   mediaUrl?: string;
   mediaMimeType?: string;
   mediaFileName?: string;

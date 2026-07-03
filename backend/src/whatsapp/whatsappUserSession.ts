@@ -18,6 +18,12 @@ import type {
   WhatsAppMediaSendInput,
 } from './whatsapp.types';
 import type { IWhatsAppSessionClient } from './whatsapp.provider';
+import {
+  extractReplyFromMessage,
+  extractTextFromProtoMessage,
+  getProtoMessageType,
+  resolveIncomingRouting,
+} from './whatsappMessageMeta';
 
 export type WhatsAppContactChangePartial = {
   jid: string;
@@ -48,29 +54,6 @@ function maskCode(code: string): string {
 
 function digitsOnly(phone: string): string {
   return phone.replace(/\D/g, '');
-}
-
-function extractPhoneFromJid(rawJid: string): string | null {
-  const trimmed = rawJid.trim();
-  if (!trimmed.includes('@')) return null;
-  const [userPartRaw, domainRaw] = trimmed.split('@');
-  const userPart = (userPartRaw ?? '').split(':')[0] ?? '';
-  const domain = (domainRaw ?? '').toLowerCase();
-  if (domain !== 's.whatsapp.net' && domain !== 'c.us') {
-    return null;
-  }
-  const digits = digitsOnly(userPart);
-  if (digits.length < 8 || digits.length > 20) {
-    return null;
-  }
-  return digits;
-}
-
-function normalizeSenderForWebhook(rawJid: string): string {
-  const phone = extractPhoneFromJid(rawJid);
-  if (phone) return phone;
-  // Sem fallback para LID/ID interno: expõe apenas telefone real quando resolvível.
-  return '';
 }
 
 function buildOtpMessage(code: string): string {
@@ -193,17 +176,23 @@ export class WhatsAppUserSession implements IWhatsAppSessionClient {
           if (!remoteJid || remoteJid.endsWith('@broadcast')) continue;
 
           const media = await this.extractIncomingMedia(msg);
+          const routing = resolveIncomingRouting(msg);
+          const reply = extractReplyFromMessage(msg.message);
           const payload: WhatsAppIncomingMessageEvent = {
             messageId: msg.key.id ?? `msg_${Date.now()}`,
-            from: normalizeSenderForWebhook(remoteJid),
+            from: routing.from,
             to: msg.pushName ?? null,
             timestamp: new Date(
               (Number(msg.messageTimestamp ?? Math.floor(Date.now() / 1000)) || Math.floor(Date.now() / 1000)) *
                 1000
             ).toISOString(),
-            text: this.extractIncomingText(msg.message),
+            text: extractTextFromProtoMessage(msg.message),
             userId: this.options.userId,
             instanceId: this.options.instanceId,
+            isGroup: routing.isGroup,
+            chatJid: routing.chatJid,
+            senderJid: routing.senderJid,
+            ...(reply ? { reply } : {}),
             media,
           };
 
@@ -500,13 +489,19 @@ export class WhatsAppUserSession implements IWhatsAppSessionClient {
     const items = rows.map((msg) => {
       const key = msg.key ?? {};
       const remoteJid = key.remoteJid ?? jid;
+      const routing = resolveIncomingRouting(msg);
+      const reply = extractReplyFromMessage(msg.message);
       return {
         id: key.id ?? `msg_${Date.now()}`,
         jid: remoteJid,
         fromMe: Boolean(key.fromMe),
         timestamp: this.toIsoTimestamp(msg.messageTimestamp),
-        text: this.extractIncomingText(msg.message),
-        type: this.getMessageType(msg.message),
+        text: extractTextFromProtoMessage(msg.message),
+        type: getProtoMessageType(msg.message),
+        isGroup: routing.isGroup,
+        chatJid: routing.chatJid,
+        senderJid: routing.senderJid,
+        ...(reply ? { reply } : {}),
       };
     });
 
@@ -590,25 +585,6 @@ export class WhatsAppUserSession implements IWhatsAppSessionClient {
       lower.includes('not registered') ||
       lower.includes('invalid number')
     );
-  }
-
-  private extractIncomingText(message: unknown): string {
-    if (!message || typeof message !== 'object') return '';
-    const m = message as Record<string, unknown>;
-
-    const conversation = m.conversation;
-    if (typeof conversation === 'string') return conversation;
-
-    const ext = m.extendedTextMessage as { text?: unknown } | undefined;
-    if (ext && typeof ext.text === 'string') return ext.text;
-
-    const image = m.imageMessage as { caption?: unknown } | undefined;
-    if (image && typeof image.caption === 'string') return image.caption;
-
-    const video = m.videoMessage as { caption?: unknown } | undefined;
-    if (video && typeof video.caption === 'string') return video.caption;
-
-    return '';
   }
 
   private async extractIncomingMedia(
@@ -705,14 +681,6 @@ export class WhatsAppUserSession implements IWhatsAppSessionClient {
       );
       return undefined;
     }
-  }
-
-  private getMessageType(message: unknown): string {
-    if (!message || typeof message !== 'object') return 'unknown';
-    const m = message as Record<string, unknown>;
-    const keys = Object.keys(m);
-    if (keys.length === 0) return 'unknown';
-    return String(keys[0]);
   }
 
   private toIsoTimestamp(raw: unknown): string {

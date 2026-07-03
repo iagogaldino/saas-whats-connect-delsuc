@@ -9,6 +9,7 @@ export type {
   WhatsAppProfilePhotoBody,
   WhatsAppListeningStatusBody,
   WhatsAppIncomingMessageEvent,
+  WhatsAppIncomingMessageReply,
   WhatsAppContact,
   WhatsAppContactsBody,
   WhatsAppConversationMessage,

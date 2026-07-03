@@ -466,7 +466,8 @@ Authorization: Bearer <token>
             <strong>Path params:</strong> <code className="font-mono text-xs">instanceId</code> (ObjectId ou código da
             instância) e <code className="font-mono text-xs">jid</code> da conversa. Você pode enviar só o número (ex.:{' '}
             <code className="font-mono text-xs">5511999999999</code>) que a API converte para JID automaticamente, ou
-            informar o JID completo (ex.: <code className="font-mono text-xs">5511999999999@s.whatsapp.net</code>).
+            informar o JID completo (ex.: <code className="font-mono text-xs">5511999999999@s.whatsapp.net</code> ou{' '}
+            <code className="font-mono text-xs">120363163341782618@g.us</code> para grupos).
           </p>
           <p>
             <strong>Query params:</strong> <code className="font-mono text-xs">limit</code> opcional (1..100, padrão 20) e{' '}
@@ -489,7 +490,16 @@ Authorization: Bearer <token>
 #       "fromMe": false,
 #       "timestamp": "2026-05-05T10:12:00.000Z",
 #       "text": "Olá, tudo bem?",
-#       "type": "conversation"
+#       "type": "conversation",
+#       "isGroup": false,
+#       "chatJid": "5511999999999@s.whatsapp.net",
+#       "senderJid": "5511999999999@s.whatsapp.net",
+#       "reply": {
+#         "quotedMessageId": "85C8BECF03530712764F03497688DD22",
+#         "quotedParticipant": "5511888888888@s.whatsapp.net",
+#         "quotedText": "Tudo certo?",
+#         "quotedType": "conversation"
+#       }
 #     }
 #   ],
 #   "nextCursor": "3EB0C767F26B1C0A0F8B"
@@ -524,7 +534,9 @@ Authorization: Bearer <token>
 # }`}</CodeBlock>
           <p className="text-outline text-xs">
             O campo <code className="font-mono text-xs">id</code> pode ser o identificador do WhatsApp (Baileys) ou o
-            id interno, conforme o registo. Para baixar o ficheiro, use sempre o URL completo em{' '}
+            id interno, conforme o registo. Itens podem incluir <code className="font-mono text-xs">isGroup</code>,{' '}
+            <code className="font-mono text-xs">chatJid</code>, <code className="font-mono text-xs">senderJid</code> e{' '}
+            <code className="font-mono text-xs">reply</code> (mesma forma do webhook). Para baixar o ficheiro, use sempre o URL completo em{' '}
             <code className="font-mono text-xs">mediaUrl</code> (contém o id MongoDB da mensagem persistida).
           </p>
         </Section>
@@ -673,7 +685,14 @@ Content-Type: application/json
             Socket <code className="font-mono text-xs">whatsapp.message.received</code>. O tipo
             <code className="font-mono text-xs"> TypeScript</code> é:
           </p>
-          <CodeBlock>{`type WhatsAppIncomingMessageEvent = {
+          <CodeBlock>{`type WhatsAppIncomingMessageReply = {
+  quotedMessageId: string;   // id da mensagem citada no WhatsApp
+  quotedParticipant: string | null; // JID de quem enviou a citada (pode ser @lid)
+  quotedText: string;      // texto/legenda da mensagem citada, quando existir
+  quotedType: string;      // tipo proto (ex. conversation, imageMessage)
+};
+
+type WhatsAppIncomingMessageEvent = {
   messageId: string;   // id da mensagem no WhatsApp (Baileys)
   from: string;        // telefone do remetente (só dígitos); vazio se não resolvível
   to: string | null;   // pushName do contacto, se existir; senão null
@@ -681,6 +700,10 @@ Content-Type: application/json
   text: string;        // texto ou legenda (caption), quando existir
   userId: string;      // id do utilizador (conta) no painel
   instanceId: string;  // id da instância WhatsApp desta ligação
+  isGroup: boolean;    // true quando a conversa é um grupo (@g.us)
+  chatJid: string;     // JID da conversa (grupo ou contacto)
+  senderJid: string;   // JID de quem enviou (em grupo: participant)
+  reply?: WhatsAppIncomingMessageReply; // presente quando é resposta a outra mensagem
   media?: {            // opcional — presente quando o servidor baixou a mídia com sucesso
     fileBuffer?: Buffer | { type: 'Buffer'; data: number[] };
     mimeType?: string;
@@ -698,8 +721,22 @@ Content-Type: application/json
             ).
           </p>
           <p className="text-outline text-xs">
+            <strong>Grupos:</strong> <code className="font-mono text-xs">isGroup</code> é{' '}
+            <code className="font-mono text-xs">true</code> e <code className="font-mono text-xs">chatJid</code> termina
+            em <code className="font-mono text-xs">@g.us</code>. O remetente real fica em{' '}
+            <code className="font-mono text-xs">senderJid</code> e, quando resolvível, em{' '}
+            <code className="font-mono text-xs">from</code> (telefone).
+          </p>
+          <p className="text-outline text-xs">
+            <strong>Respostas:</strong> quando o utilizador responde a outra mensagem no WhatsApp, o objeto{' '}
+            <code className="font-mono text-xs">reply</code> inclui o id e o conteúdo citado. Em contactos com
+            privacidade/LID, <code className="font-mono text-xs">quotedParticipant</code> pode vir como{' '}
+            <code className="font-mono text-xs">@lid</code> em vez de telefone.
+          </p>
+          <p className="text-outline text-xs">
             Observação: quando o WhatsApp não expõe o telefone real do remetente, o campo{' '}
-            <code className="font-mono text-xs">from</code> é enviado como string vazia.
+            <code className="font-mono text-xs">from</code> é enviado como string vazia — use{' '}
+            <code className="font-mono text-xs">senderJid</code> como identificador opaco.
           </p>
           <p className="text-on-surface text-xs font-semibold">Mídia recebida (webhook e socket)</p>
           <p className="text-outline text-xs">
@@ -728,7 +765,42 @@ Content-Type: application/json
   "timestamp": "2025-04-24T18:32:11.000Z",
   "text": "Olá, preciso de ajuda.",
   "userId": "65a1b2c3d4e5f6789abcdef0",
-  "instanceId": "65a1b2c3d4e5f6789abcdef1"
+  "instanceId": "65a1b2c3d4e5f6789abcdef1",
+  "isGroup": false,
+  "chatJid": "5511999999999@s.whatsapp.net",
+  "senderJid": "5511999999999@s.whatsapp.net"
+}`}</CodeBlock>
+          <p className="text-on-surface text-xs font-semibold">Exemplo — resposta em conversa 1:1</p>
+          <CodeBlock>{`{
+  "messageId": "3EB0C767F26B1C0A0F8F",
+  "from": "5511999999999",
+  "to": "Nome do contacto",
+  "timestamp": "2025-04-24T18:33:00.000Z",
+  "text": "Sim, pode ser às 15h.",
+  "userId": "65a1b2c3d4e5f6789abcdef0",
+  "instanceId": "65a1b2c3d4e5f6789abcdef1",
+  "isGroup": false,
+  "chatJid": "5511999999999@s.whatsapp.net",
+  "senderJid": "5511999999999@s.whatsapp.net",
+  "reply": {
+    "quotedMessageId": "85C8BECF03530712764F03497688DD22",
+    "quotedParticipant": "5511888888888@s.whatsapp.net",
+    "quotedText": "Qual horário funciona para você?",
+    "quotedType": "conversation"
+  }
+}`}</CodeBlock>
+          <p className="text-on-surface text-xs font-semibold">Exemplo — mensagem em grupo</p>
+          <CodeBlock>{`{
+  "messageId": "3EB0C767F26B1C0A0F90",
+  "from": "5511777777777",
+  "to": "Maria",
+  "timestamp": "2025-04-24T18:34:00.000Z",
+  "text": "Combinado no grupo!",
+  "userId": "65a1b2c3d4e5f6789abcdef0",
+  "instanceId": "65a1b2c3d4e5f6789abcdef1",
+  "isGroup": true,
+  "chatJid": "120363163341782618@g.us",
+  "senderJid": "5511777777777@s.whatsapp.net"
 }`}</CodeBlock>
           <p className="text-on-surface text-xs font-semibold">Exemplo — documento recebido (webhook; socket usa a mesma forma, buffer pode variar)</p>
           <CodeBlock>{`{
@@ -739,6 +811,9 @@ Content-Type: application/json
   "text": "Segue o contrato assinado.",
   "userId": "65a1b2c3d4e5f6789abcdef0",
   "instanceId": "65a1b2c3d4e5f6789abcdef1",
+  "isGroup": false,
+  "chatJid": "5511999999999@s.whatsapp.net",
+  "senderJid": "5511999999999@s.whatsapp.net",
   "media": {
     "fileBuffer": { "type": "Buffer", "data": [37, 80, 68, 70, 45, 49, 46, 52] },
     "mimeType": "application/pdf",
@@ -755,6 +830,9 @@ Content-Type: application/json
   "text": "",
   "userId": "65a1b2c3d4e5f6789abcdef0",
   "instanceId": "65a1b2c3d4e5f6789abcdef1",
+  "isGroup": false,
+  "chatJid": "5511999999999@s.whatsapp.net",
+  "senderJid": "5511999999999@s.whatsapp.net",
   "media": {
     "fileBuffer": { "type": "Buffer", "data": [79, 103, 103, 83] },
     "mimeType": "audio/ogg; codecs=opus",

@@ -199,11 +199,13 @@ export async function recordSend(
 }
 
 export async function recordIncomingMessage(event: WhatsAppIncomingMessageEvent): Promise<void> {
+  const phoneFromSender =
+    event.from || (event.senderJid ? normalizePhone(event.senderJid) : '');
   const payload: Record<string, unknown> = {
     userId: new mongoose.Types.ObjectId(event.userId),
     instanceId: new mongoose.Types.ObjectId(event.instanceId),
-    phoneNumber: normalizePhone(event.from),
-    jid: normalizeJid(event.from),
+    phoneNumber: phoneFromSender,
+    jid: event.chatJid || normalizeJid(event.from),
     messageId: event.messageId,
     direction: 'inbound',
     fromMe: false,
@@ -211,10 +213,21 @@ export async function recordIncomingMessage(event: WhatsAppIncomingMessageEvent)
     status: 'success',
     message: event.text?.slice(0, MAX_MESSAGE_LEN) || '',
     messageTimestamp: new Date(event.timestamp),
+    isGroup: event.isGroup,
+    chatJid: event.chatJid,
+    senderJid: event.senderJid,
     mediaMimeType: event.media?.mimeType,
     mediaFileName: event.media?.fileName,
     mediaSize: event.media?.size,
   };
+  if (event.reply) {
+    payload.reply = {
+      quotedMessageId: event.reply.quotedMessageId,
+      quotedParticipant: event.reply.quotedParticipant ?? '',
+      quotedText: event.reply.quotedText?.slice(0, MAX_MESSAGE_LEN) ?? '',
+      quotedType: event.reply.quotedType,
+    };
+  }
   if (event.media?.fileBuffer && event.media.fileBuffer.length > 0) {
     const mediaSaved = await saveMediaFile({
       userId: event.userId,
@@ -275,23 +288,48 @@ export async function listConversationForUser(
     jid: normalizeJid(jid),
   };
   const docs = await SentMessage.find(filter).sort({ createdAt: -1 }).limit(500).lean();
-  const mapped: WhatsAppConversationMessage[] = docs.map((doc) => ({
-    id: (doc.messageId as string | undefined) ?? doc._id.toString(),
-    jid: (doc.jid as string | undefined) ?? normalizeJid(String(doc.phoneNumber ?? '')),
-    fromMe: Boolean(doc.fromMe ?? doc.direction === 'outbound'),
-    timestamp:
-      doc.messageTimestamp instanceof Date
-        ? doc.messageTimestamp.toISOString()
-        : doc.createdAt instanceof Date
-          ? doc.createdAt.toISOString()
-          : new Date(doc.createdAt).toISOString(),
-    text: (doc.message as string | undefined) ?? '',
-    type: (doc.type as string | undefined) ?? 'text',
-    mediaUrl: doc.mediaPath ? `/api/v1/instances/${instanceId}/whatsapp/messages/${doc._id.toString()}/media` : undefined,
-    mediaMimeType: (doc.mediaMimeType as string | undefined) ?? undefined,
-    mediaFileName: (doc.mediaFileName as string | undefined) ?? undefined,
-    mediaSize: (doc.mediaSize as number | undefined) ?? undefined,
-  }));
+  const mapped: WhatsAppConversationMessage[] = docs.map((doc) => {
+    const replyDoc = doc.reply as
+      | {
+          quotedMessageId?: string;
+          quotedParticipant?: string;
+          quotedText?: string;
+          quotedType?: string;
+        }
+      | undefined;
+    const reply =
+      replyDoc?.quotedMessageId != null
+        ? {
+            quotedMessageId: replyDoc.quotedMessageId,
+            quotedParticipant: replyDoc.quotedParticipant ?? null,
+            quotedText: replyDoc.quotedText ?? '',
+            quotedType: replyDoc.quotedType ?? 'unknown',
+          }
+        : undefined;
+    return {
+      id: (doc.messageId as string | undefined) ?? doc._id.toString(),
+      jid: (doc.jid as string | undefined) ?? normalizeJid(String(doc.phoneNumber ?? '')),
+      fromMe: Boolean(doc.fromMe ?? doc.direction === 'outbound'),
+      timestamp:
+        doc.messageTimestamp instanceof Date
+          ? doc.messageTimestamp.toISOString()
+          : doc.createdAt instanceof Date
+            ? doc.createdAt.toISOString()
+            : new Date(doc.createdAt).toISOString(),
+      text: (doc.message as string | undefined) ?? '',
+      type: (doc.type as string | undefined) ?? 'text',
+      isGroup: Boolean(doc.isGroup),
+      chatJid: (doc.chatJid as string | undefined) ?? (doc.jid as string | undefined),
+      senderJid: doc.senderJid as string | undefined,
+      ...(reply ? { reply } : {}),
+      mediaUrl: doc.mediaPath
+        ? `/api/v1/instances/${instanceId}/whatsapp/messages/${doc._id.toString()}/media`
+        : undefined,
+      mediaMimeType: (doc.mediaMimeType as string | undefined) ?? undefined,
+      mediaFileName: (doc.mediaFileName as string | undefined) ?? undefined,
+      mediaSize: (doc.mediaSize as number | undefined) ?? undefined,
+    };
+  });
   let items = mapped.slice(0, limit);
   if (opts?.beforeMessageId) {
     const idx = mapped.findIndex((m) => m.id === opts.beforeMessageId);

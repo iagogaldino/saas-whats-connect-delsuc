@@ -17,6 +17,15 @@ const sentMessageSchema = new mongoose.Schema(
     phoneNumber: { type: String, required: true },
     jid: { type: String, required: false, index: true },
     messageId: { type: String, required: false, index: true },
+    isGroup: { type: Boolean, required: false, default: false },
+    chatJid: { type: String, required: false },
+    senderJid: { type: String, required: false },
+    reply: {
+      quotedMessageId: { type: String, required: false },
+      quotedParticipant: { type: String, required: false },
+      quotedText: { type: String, required: false },
+      quotedType: { type: String, required: false },
+    },
     direction: {
       type: String,
       required: true,

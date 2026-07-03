@@ -320,12 +320,21 @@ export function createWhatsAppRouter(
       }
       const payload: WhatsAppIncomingMessageEvent = {
         messageId: 'webhook_test',
-        from: '5511999999999@s.whatsapp.net',
+        from: '5511999999999',
         to: 'Teste',
         timestamp: new Date().toISOString(),
         text: 'Mensagem de teste do webhook (WhatsAppConnect)',
         userId,
         instanceId,
+        isGroup: false,
+        chatJid: '5511999999999@s.whatsapp.net',
+        senderJid: '5511999999999@s.whatsapp.net',
+        reply: {
+          quotedMessageId: 'WEBHOOK_TEST_QUOTED_ID',
+          quotedParticipant: '5511888888888@s.whatsapp.net',
+          quotedText: 'Mensagem original citada (exemplo)',
+          quotedType: 'conversation',
+        },
       };
       const response = await webhookDispatcher.deliverTest(config.url, config.secret, payload);
       res.json({ ok: response.ok, status: response.status });
