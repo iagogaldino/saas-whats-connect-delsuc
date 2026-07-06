@@ -623,9 +623,28 @@ Authorization: Bearer <jwt>
             <code className="font-mono text-xs"> POST /api/v1/auth/instances/:instanceId/send-code</code>.
           </p>
           <p>
-            <code className="font-mono text-xs">phoneNumber</code>: 10 a 15 dígitos.{' '}
+            Informe <strong>um</strong> destino: <code className="font-mono text-xs">phoneNumber</code>{' '}
+            <strong>ou</strong> <code className="font-mono text-xs">chatJid</code> (não ambos).{' '}
             <code className="font-mono text-xs">message</code>: conteúdo da mensagem (1 a 200 caracteres).
           </p>
+          <p className="text-outline text-xs">
+            <strong>phoneNumber</strong> — 10 a 15 dígitos (DDI + número). Use quando o payload recebido tiver{' '}
+            <code className="font-mono text-xs">from</code> preenchido.
+          </p>
+          <p className="text-outline text-xs">
+            <strong>chatJid</strong> — JID completo da conversa. Obrigatório quando{' '}
+            <code className="font-mono text-xs">from</code> vem vazio (ex. contas com privacidade{' '}
+            <code className="font-mono text-xs">@lid</code>) ou para responder em grupo (
+            <code className="font-mono text-xs">@g.us</code>). Sufixos aceites:{' '}
+            <code className="font-mono text-xs">@s.whatsapp.net</code>,{' '}
+            <code className="font-mono text-xs">@lid</code>, <code className="font-mono text-xs">@g.us</code>.
+            Copie o valor de <code className="font-mono text-xs">chatJid</code> (ou{' '}
+            <code className="font-mono text-xs">senderJid</code> em DM) do evento{' '}
+            <code className="font-mono text-xs">whatsapp.message.received</code> —{' '}
+            <strong>não envie só os dígitos</strong> sem o sufixo{' '}
+            <code className="font-mono text-xs">@lid</code>/<code className="font-mono text-xs">@g.us</code>.
+          </p>
+          <p className="text-on-surface text-xs font-semibold">Exemplo — telefone</p>
           <CodeBlock>{`POST ${base}/api/v1/auth/instances/<instanceId>/send-code
 Authorization: Bearer <token>
 Content-Type: application/json
@@ -634,8 +653,22 @@ Content-Type: application/json
   "phoneNumber": "5511999999999",
   "message": "Olá! Sua solicitação foi recebida e já está em atendimento."
 }`}</CodeBlock>
+          <p className="text-on-surface text-xs font-semibold">Exemplo — conta @lid (sem telefone no recebimento)</p>
+          <CodeBlock>{`POST ${base}/api/v1/auth/instances/<instanceId>/send-code
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "chatJid": "123093813043447@lid",
+  "message": "Olá, Marizuc! Recebemos sua mensagem."
+}`}</CodeBlock>
+          <p className="text-on-surface text-xs font-semibold">Exemplo — grupo</p>
+          <CodeBlock>{`{
+  "chatJid": "120363163341782618@g.us",
+  "message": "Combinado no grupo!"
+}`}</CodeBlock>
           <p className="text-outline text-xs">
-            200: mensagem enviada. 400: validação/número sem WhatsApp. 403: limite diário do plano
+            200: mensagem enviada. 400: validação, destino inválido ou sem WhatsApp. 403: limite diário do plano
             grátis atingido (envios com sucesso, janela UTC; configurável com{' '}
             <code className="font-mono">FREE_DAILY_SEND_LIMIT</code>). 503: sessão não conectada.
           </p>
@@ -736,8 +769,32 @@ type WhatsAppIncomingMessageEvent = {
           <p className="text-outline text-xs">
             Observação: quando o WhatsApp não expõe o telefone real do remetente, o campo{' '}
             <code className="font-mono text-xs">from</code> é enviado como string vazia — use{' '}
-            <code className="font-mono text-xs">senderJid</code> como identificador opaco.
+            <code className="font-mono text-xs">chatJid</code> no envio (
+            <a href="#send-code" className="text-primary font-medium underline-offset-2 hover:underline">
+              Envio de mensagem
+            </a>
+            ) ou <code className="font-mono text-xs">senderJid</code> como identificador opaco.
           </p>
+          <p className="text-outline text-xs">
+            <strong>Responder automaticamente:</strong> se <code className="font-mono text-xs">from</code> tiver
+            dígitos, envie com <code className="font-mono text-xs">phoneNumber</code>; caso contrário, envie com{' '}
+            <code className="font-mono text-xs">chatJid</code> igual ao recebido (ex.{' '}
+            <code className="font-mono text-xs">123093813043447@lid</code> ou{' '}
+            <code className="font-mono text-xs">120363…@g.us</code> para grupo).
+          </p>
+          <p className="text-on-surface text-xs font-semibold">Exemplo — DM com @lid (conta empresarial / privacidade)</p>
+          <CodeBlock>{`{
+  "messageId": "3EB05A3E243FFBE25B02E5",
+  "from": "",
+  "to": "Marizuc Loja",
+  "timestamp": "2026-07-06T18:21:36.000Z",
+  "text": "Olá",
+  "userId": "69f9d4e99df08c3073dd4d05",
+  "instanceId": "69f9d4f19df08c3073dd4d0e",
+  "isGroup": false,
+  "chatJid": "123093813043447@lid",
+  "senderJid": "123093813043447@lid"
+}`}</CodeBlock>
           <p className="text-on-surface text-xs font-semibold">Mídia recebida (webhook e socket)</p>
           <p className="text-outline text-xs">
             Imagem, vídeo, documento (PDF, DOC, etc.) e <strong>áudio/notas de voz</strong> (
@@ -906,11 +963,23 @@ const socket = io('${base}', {
 
 socket.emit(
   'whatsapp.message.send',
-  { phoneNumber: '5511999999999', text: 'Mensagem enviada pelo canal em tempo real.' },
+  { phoneNumber: '5511999999999', text: 'Mensagem para telefone conhecido.' },
+  (ack) => console.log(ack)
+);
+
+// Sem telefone no recebimento (@lid) ou resposta em grupo — use chatJid completo:
+socket.emit(
+  'whatsapp.message.send',
+  { chatJid: '123093813043447@lid', text: 'Resposta para conta @lid.' },
   (ack) => console.log(ack)
 );
 
 socket.on('whatsapp.message.received', (payload) => {
+  const dest = payload.from
+    ? { phoneNumber: payload.from, text: 'Sua resposta aqui' }
+    : { chatJid: payload.chatJid, text: 'Sua resposta aqui' };
+  socket.emit('whatsapp.message.send', dest, (ack) => console.log(ack));
+
   // payload: WhatsAppIncomingMessageEvent — ver secção "Payload: mensagem recebida"
   // Com mídia (imagem/vídeo/documento/áudio), payload.media traz fileBuffer + mimeType + fileName
   if (payload.media?.fileBuffer) {
@@ -923,7 +992,9 @@ socket.on('whatsapp.message.received', (payload) => {
   console.log(payload);
 });`}</CodeBlock>
           <p>
-            Eventos principais: <code className="font-mono text-xs">whatsapp.message.send</code> (só texto) e{' '}
+            Eventos principais: <code className="font-mono text-xs">whatsapp.message.send</code> (texto; destino via{' '}
+            <code className="font-mono text-xs">phoneNumber</code> ou <code className="font-mono text-xs">chatJid</code>)
+            e{' '}
             <code className="font-mono text-xs">whatsapp.message.received</code> (texto e mídia recebida, incluindo notas de voz). A forma de{' '}
             <code className="font-mono text-xs">whatsapp.message.received</code> é a descrita em{' '}
             <a href="#incoming-payload" className="text-primary font-medium underline-offset-2 hover:underline">

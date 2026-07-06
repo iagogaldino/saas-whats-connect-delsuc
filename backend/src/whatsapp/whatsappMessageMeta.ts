@@ -7,6 +7,28 @@ export function isGroupChatJid(jid: string | undefined | null): boolean {
   return typeof jid === 'string' && jid.endsWith('@g.us');
 }
 
+const OUTBOUND_JID_SUFFIXES = ['@s.whatsapp.net', '@lid', '@g.us'] as const;
+
+/** Normaliza destino de envio: JID completo ou telefone (10–15 dígitos → @s.whatsapp.net). */
+export function normalizeOutboundChatJid(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  if (trimmed.includes('@')) {
+    const at = trimmed.lastIndexOf('@');
+    const userPart = trimmed.slice(0, at);
+    const domain = trimmed.slice(at + 1).toLowerCase();
+    if (!userPart || userPart.length > 64) return null;
+    const allowed = OUTBOUND_JID_SUFFIXES.some((s) => s.slice(1) === domain);
+    if (!allowed) return null;
+    return `${userPart}@${domain}`;
+  }
+
+  const digits = digitsOnly(trimmed);
+  if (digits.length < 10 || digits.length > 15) return null;
+  return `${digits}@s.whatsapp.net`;
+}
+
 function digitsOnly(phone: string): string {
   return phone.replace(/\D/g, '');
 }

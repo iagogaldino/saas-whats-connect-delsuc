@@ -61,9 +61,11 @@
  *
  * ## POST /api/v1/auth/instances/:instanceId/send-code
  * - Auth: Bearer
- * - Body: `{ phoneNumber, message }` (validação zod existente)
+ * - Body: `{ phoneNumber, message }` ou `{ chatJid, message }` (mutuamente exclusivos)
+ * - `phoneNumber`: 10..15 dígitos (DDI + número)
+ * - `chatJid`: JID completo (`@s.whatsapp.net`, `@lid`, `@g.us`) — use quando `from` vier vazio no recebimento
  * - 200: `{ ok: true, message: 'Código enviado' }`
- * - Erros via AppError: 400 (número inválido / sem WhatsApp), 503 (sessão não pronta / serviço indisponível)
+ * - Erros via AppError: 400 (destino inválido / sem WhatsApp), 503 (sessão não pronta / serviço indisponível)
  *
  * ## POST /api/v1/auth/instances/:instanceId/send-media
  * - Auth: Bearer
@@ -184,6 +186,8 @@ export interface IWhatsAppSessionService {
   getContactProfilePhotoUrl(userId: string, instanceId: string, jid: string): Promise<string | null>;
   /** Cota (plano grátis) e registo de sucesso em histórico aplicam-se aqui. */
   sendOtp(userId: string, instanceId: string, phoneNumber: string, code: string): Promise<void>;
+  /** Envio por JID quando o telefone não está disponível (`@lid`, `@g.us`, etc.). */
+  sendTextToJid(userId: string, instanceId: string, chatJid: string, text: string): Promise<void>;
   /** Envio de arquivo/documento para um número WhatsApp. */
   sendMedia(userId: string, instanceId: string, input: WhatsAppMediaSendInput): Promise<void>;
   destroySession(userId: string, instanceId: string): Promise<void>;

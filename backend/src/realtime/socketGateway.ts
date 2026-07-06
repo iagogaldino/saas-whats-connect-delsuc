@@ -3,6 +3,7 @@ import type { Logger } from 'pino';
 import { Server, type Socket } from 'socket.io';
 import { validateApiKey } from '../services/apiKey.service';
 import { getOwnedInstanceOrThrow } from '../services/instance.service';
+import { normalizeOutboundChatJid } from '../whatsapp/whatsappMessageMeta';
 import type { WhatsAppIncomingMessageEvent } from '../whatsapp';
 
 type ListeningState = {
@@ -11,7 +12,8 @@ type ListeningState = {
 };
 
 type MessageSendPayload = {
-  phoneNumber: string;
+  phoneNumber?: string;
+  chatJid?: string;
   text: string;
 };
 
@@ -19,11 +21,16 @@ type MessageSendAck =
   | { ok: true; message: string }
   | { ok: false; error: string; status?: number };
 
+type SendMessageInput = {
+  phoneNumber?: string;
+  chatJid?: string;
+  text: string;
+};
+
 type SendMessageHandler = (
   userId: string,
   instanceId: string,
-  phoneNumber: string,
-  text: string
+  input: SendMessageInput
 ) => Promise<void>;
 type LoadListeningStateHandler = (userId: string, instanceId: string) => Promise<boolean>;
 type PersistListeningStateHandler = (userId: string, instanceId: string, enabled: boolean) => Promise<void>;
@@ -147,7 +154,7 @@ export class SocketGateway {
               return;
             }
 
-            await this.sendMessageHandler(userId, instanceId, parsed.phoneNumber, parsed.text);
+            await this.sendMessageHandler(userId, instanceId, parsed.input);
             done({ ok: true, message: 'Mensagem enviada' });
           } catch (err) {
             const e = err as Error & { status?: number };
@@ -237,21 +244,32 @@ export class SocketGateway {
   }
 
   private parseSendPayload(payload: unknown):
-    | { ok: true; phoneNumber: string; text: string }
+    | { ok: true; input: SendMessageInput }
     | { ok: false; error: string } {
     if (!payload || typeof payload !== 'object') {
       return { ok: false, error: 'invalid_payload' };
     }
     const p = payload as Partial<MessageSendPayload>;
-    const phoneNumber = (p.phoneNumber ?? '').replace(/\D/g, '');
     const text = (p.text ?? '').trim();
+    const phoneNumber = (p.phoneNumber ?? '').replace(/\D/g, '');
+    const chatJidRaw = (p.chatJid ?? '').trim();
+    const hasPhone = phoneNumber.length >= 10 && phoneNumber.length <= 15;
+    const normalizedJid = chatJidRaw ? normalizeOutboundChatJid(chatJidRaw) : null;
+    const hasJid = Boolean(normalizedJid);
 
-    if (phoneNumber.length < 10 || phoneNumber.length > 15) {
-      return { ok: false, error: 'invalid_phone_number' };
+    if (!hasPhone && !hasJid) {
+      return { ok: false, error: 'invalid_destination' };
+    }
+    if (hasPhone && hasJid) {
+      return { ok: false, error: 'ambiguous_destination' };
     }
     if (text.length < 1 || text.length > 200) {
       return { ok: false, error: 'invalid_text' };
     }
-    return { ok: true, phoneNumber, text };
+
+    if (hasJid) {
+      return { ok: true, input: { chatJid: normalizedJid!, text } };
+    }
+    return { ok: true, input: { phoneNumber, text } };
   }
 }

@@ -68,7 +68,7 @@ Na primeira vez, escaneie o QR code exibido no terminal com o WhatsApp no celula
 - `GET /api/v1/instances/:instanceId/messages`
 - `DELETE /api/v1/instances/:instanceId/messages` (JWT; remove todo histórico da instância + mídias)
 
-Corpo JSON:
+Corpo JSON — informe **phoneNumber** ou **chatJid** (não ambos):
 
 ```json
 {
@@ -77,7 +77,17 @@ Corpo JSON:
 }
 ```
 
-- Respostas **400**: payload inválido ou número sem WhatsApp.
+```json
+{
+  "chatJid": "123093813043447@lid",
+  "message": "Resposta para conta sem telefone exposto"
+}
+```
+
+- `phoneNumber`: 10 a 15 dígitos, quando o remetente expõe telefone (`from` no evento recebido).
+- `chatJid`: JID completo (`@s.whatsapp.net`, `@lid`, `@g.us`) — obrigatório quando `from` vem vazio ou para grupos.
+
+- Respostas **400**: payload inválido, destino inválido ou sem WhatsApp.
 - Respostas **503**: cliente WhatsApp não inicializado ou não conectado (aguarde o QR ou reconexão).
 
 ### Listar mensagens de uma conversa

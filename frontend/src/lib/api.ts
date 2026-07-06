@@ -59,7 +59,8 @@ export type WebhookTestResponse = {
 };
 
 export type SendCodeBody = {
-  phoneNumber: string;
+  phoneNumber?: string;
+  chatJid?: string;
   message: string;
 };
 

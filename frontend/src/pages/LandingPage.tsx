@@ -70,6 +70,9 @@ POST /api/v1/auth/instances/<instanceId>/send-code
   "message": "Olá! Esta é uma mensagem livre enviada pela API."
 }
 
+# Sem telefone (@lid) ou grupo — use chatJid completo:
+# { "chatJid": "123093813043447@lid", "message": "..." }
+
 // Response 200 OK
 { "ok": true, "message": "Código enviado" }`}
               </pre>

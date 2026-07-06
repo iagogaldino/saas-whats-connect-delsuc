@@ -5,6 +5,7 @@ import type {
   WhatsAppConversationMessagesBody,
   IWhatsAppSessionService,
   WhatsAppContact,
+  WhatsAppIncomingMessageEvent,
   WhatsAppMediaSendInput,
   WhatsAppSessionServiceBootstrapOptions,
 } from './whatsapp.types';
@@ -36,6 +37,36 @@ function errorMessage(err: unknown): string {
   return String(err);
 }
 
+/** Payload serializável para log (omite bytes de mídia). */
+function incomingPayloadForLog(payload: WhatsAppIncomingMessageEvent): Record<string, unknown> {
+  const media = payload.media;
+  return {
+    messageId: payload.messageId,
+    from: payload.from,
+    to: payload.to,
+    timestamp: payload.timestamp,
+    text: payload.text,
+    userId: payload.userId,
+    instanceId: payload.instanceId,
+    isGroup: payload.isGroup,
+    chatJid: payload.chatJid,
+    senderJid: payload.senderJid,
+    ...(payload.reply ? { reply: payload.reply } : {}),
+    ...(media
+      ? {
+          media: {
+            mimeType: media.mimeType,
+            fileName: media.fileName,
+            size: media.size,
+            fileBuffer: media.fileBuffer
+              ? `<Buffer ${media.fileBuffer.length} bytes>`
+              : undefined,
+          },
+        }
+      : {}),
+  };
+}
+
 /**
  * Registo de sessões [Baileys](https://github.com/WhiskeySockets/Baileys) por utilizador do painel.
  */
@@ -64,15 +95,8 @@ export class WhatsAppSessionService implements IWhatsAppSessionService {
       connectTimeoutMs: this.options.connectTimeoutMs,
       onIncomingMessage: (payload) => {
         this.log.info(
-          {
-            userId,
-            instanceId,
-            messageId: payload.messageId,
-            from: payload.from,
-            timestamp: payload.timestamp,
-            textPreview: payload.text?.slice(0, 120) ?? '',
-          },
-          'WhatsApp: nova mensagem recebida'
+          { payload: incomingPayloadForLog(payload) },
+          'WhatsApp: payload de mensagem recebida'
         );
         void this.shouldPersistMessages(userId, instanceId)
           .then((enabled) => {
@@ -239,6 +263,34 @@ export class WhatsAppSessionService implements IWhatsAppSessionService {
     } catch (err) {
       if (persistEnabled) {
         await recordSend(userId, instanceId, phoneNumber, 'failed', formatSendError(err), code).catch(() => {
+          /* não re-lança; erro principal mantém-se */
+        });
+      }
+      throw err;
+    }
+  }
+
+  async sendTextToJid(userId: string, instanceId: string, chatJid: string, text: string): Promise<void> {
+    const session = this.sessions.get(this.sessionKey(userId, instanceId));
+    if (!session) {
+      throw new AppError(
+        'WhatsApp não iniciado. Use o painel para conectar (Gerar QR) antes de enviar mensagens.',
+        503
+      );
+    }
+    await assertFreePlanCanSend(userId);
+    const persistEnabled = await this.shouldPersistMessages(userId, instanceId);
+    const historyKey = chatJid.split('@')[0] ?? chatJid;
+    try {
+      await session.sendTextToJid(chatJid, text);
+      if (persistEnabled) {
+        await recordSend(userId, instanceId, historyKey, 'success', undefined, text).catch(() => {
+          /* não re-lança; envio WhatsApp já concluiu */
+        });
+      }
+    } catch (err) {
+      if (persistEnabled) {
+        await recordSend(userId, instanceId, historyKey, 'failed', formatSendError(err), text).catch(() => {
           /* não re-lança; erro principal mantém-se */
         });
       }

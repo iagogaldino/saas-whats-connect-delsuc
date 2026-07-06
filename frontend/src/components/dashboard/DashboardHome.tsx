@@ -21,7 +21,7 @@ import {
   postWebhookTestForInstance,
   updateMessagePersistenceForInstance,
 } from '../../lib/api';
-import { validateCode, validatePhone } from '../../lib/validation';
+import { validateChatJid, validateCode, validatePhone } from '../../lib/validation';
 import { Icon } from './Icon';
 
 function formatSyncTime(): string {
@@ -42,7 +42,9 @@ type DashboardHomeProps = {
 };
 
 export function DashboardHome({ instanceId, instanceName, instanceCode }: DashboardHomeProps) {
+  const [destinationMode, setDestinationMode] = useState<'phone' | 'jid'>('phone');
   const [phone, setPhone] = useState('');
+  const [chatJid, setChatJid] = useState('');
   const [code, setCode] = useState('');
 
   const [apiOnline, setApiOnline] = useState<boolean | null>(null);
@@ -91,8 +93,13 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
   const [currentPhotoLoading, setCurrentPhotoLoading] = useState(false);
 
   const digitsPhone = phone.replace(/\D/g, '');
+  const chatJidTrimmed = chatJid.trim();
   const codeTrimmed = code.trim();
   const codeValid = codeTrimmed.length >= 1 && codeTrimmed.length <= 200;
+  const destinationValid =
+    destinationMode === 'phone'
+      ? validatePhone(digitsPhone) === null
+      : validateChatJid(chatJidTrimmed) === null;
 
   useEffect(() => {
     if (!profilePhotoFile) {
@@ -481,12 +488,13 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
 
   async function handleSend(e: FormEvent) {
     e.preventDefault();
-    const errPhone = validatePhone(digitsPhone);
+    const errDestination =
+      destinationMode === 'phone' ? validatePhone(digitsPhone) : validateChatJid(chatJidTrimmed);
     const errCode = validateCode(code);
-    if (errPhone || errCode) {
+    if (errDestination || errCode) {
       setResponseLog(
         JSON.stringify(
-          { error: 'validation', messages: [errPhone, errCode].filter(Boolean) },
+          { error: 'validation', messages: [errDestination, errCode].filter(Boolean) },
           null,
           2
         )
@@ -496,7 +504,12 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
 
     setSendLoading(true);
     try {
-      const res = await sendCode(instanceId, { phoneNumber: digitsPhone, message: codeTrimmed });
+      const res = await sendCode(
+        instanceId,
+        destinationMode === 'phone'
+          ? { phoneNumber: digitsPhone, message: codeTrimmed }
+          : { chatJid: chatJidTrimmed, message: codeTrimmed }
+      );
       setResponseLog(JSON.stringify({ ok: true, status: 200, body: res }, null, 2));
     } catch (err) {
       const e = err as Error & { status?: number; details?: unknown };
@@ -523,6 +536,7 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
 
   function handleClearForm() {
     setPhone('');
+    setChatJid('');
     setCode('');
   }
 
@@ -878,30 +892,79 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
             </h2>
             <form className="space-y-6" onSubmit={handleSend}>
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                <div>
+                <div className="col-span-full md:col-span-2">
                   <label className="text-outline mb-2 block text-[10px] font-black uppercase tracking-widest">
-                    Phone Number
+                    Destino
                   </label>
-                  <div className="flex">
-                    <span className="border-outline-variant/10 bg-surface-container-high text-outline flex items-center rounded-l-lg border-r px-3 text-xs font-bold">
-                      +
-                    </span>
-                        <input
-                          className="focus:ring-primary/20 w-full rounded-r-lg border-none bg-surface-container-low p-3 text-sm transition-all focus:ring-2"
-                          placeholder="+55 11 99999-9999"
-                          type="text"
-                          inputMode="tel"
-                          autoComplete="tel"
-                          value={phone}
-                          onChange={(e) =>
-                            setPhone(e.target.value.replace(/[^\d+()\s\-]/g, '').slice(0, 25))
-                          }
-                        />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className={`rounded-lg px-3 py-2 text-[10px] font-bold uppercase tracking-wide transition-colors ${
+                        destinationMode === 'phone'
+                          ? 'bg-primary text-on-primary'
+                          : 'border-outline-variant text-outline hover:bg-surface-container-low border'
+                      }`}
+                      onClick={() => setDestinationMode('phone')}
+                    >
+                      Telefone
+                    </button>
+                    <button
+                      type="button"
+                      className={`rounded-lg px-3 py-2 text-[10px] font-bold uppercase tracking-wide transition-colors ${
+                        destinationMode === 'jid'
+                          ? 'bg-primary text-on-primary'
+                          : 'border-outline-variant text-outline hover:bg-surface-container-low border'
+                      }`}
+                      onClick={() => setDestinationMode('jid')}
+                    >
+                      Chat JID
+                    </button>
                   </div>
-                  <p className="text-outline mt-2 text-[10px]">
-                    Pode incluir +, espaços e traços; o envio usa só os dígitos (10 a 15).
-                  </p>
                 </div>
+                {destinationMode === 'phone' ? (
+                  <div className="col-span-full md:col-span-2">
+                    <label className="text-outline mb-2 block text-[10px] font-black uppercase tracking-widest">
+                      Phone Number
+                    </label>
+                    <div className="flex">
+                      <span className="border-outline-variant/10 bg-surface-container-high text-outline flex items-center rounded-l-lg border-r px-3 text-xs font-bold">
+                        +
+                      </span>
+                      <input
+                        className="focus:ring-primary/20 w-full rounded-r-lg border-none bg-surface-container-low p-3 text-sm transition-all focus:ring-2"
+                        placeholder="+55 11 99999-9999"
+                        type="text"
+                        inputMode="tel"
+                        autoComplete="tel"
+                        value={phone}
+                        onChange={(e) =>
+                          setPhone(e.target.value.replace(/[^\d+()\s\-]/g, '').slice(0, 25))
+                        }
+                      />
+                    </div>
+                    <p className="text-outline mt-2 text-[10px]">
+                      Pode incluir +, espaços e traços; o envio usa só os dígitos (10 a 15).
+                    </p>
+                  </div>
+                ) : (
+                  <div className="col-span-full md:col-span-2">
+                    <label className="text-outline mb-2 block text-[10px] font-black uppercase tracking-widest">
+                      Chat JID
+                    </label>
+                    <input
+                      className="focus:ring-primary/20 w-full rounded-lg border-none bg-surface-container-low p-3 font-mono text-sm transition-all focus:ring-2"
+                      placeholder="123093813043447@lid"
+                      type="text"
+                      value={chatJid}
+                      onChange={(e) => setChatJid(e.target.value.slice(0, 128))}
+                    />
+                    <p className="text-outline mt-2 text-[10px]">
+                      JID completo do payload recebido: <span className="font-mono">@lid</span>,{' '}
+                      <span className="font-mono">@g.us</span> ou{' '}
+                      <span className="font-mono">@s.whatsapp.net</span>.
+                    </p>
+                  </div>
+                )}
                 <div className="col-span-full md:col-span-2">
                   <label className="text-outline mb-2 block text-[10px] font-black uppercase tracking-widest">
                     Mensagem
@@ -921,8 +984,10 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
                   </div>
                       <div className="mt-2 flex justify-between">
                         <p className="text-outline text-[10px]">Até 200 caracteres por mensagem.</p>
-                        <p className={`text-[10px] font-bold ${codeValid ? 'text-tertiary' : 'text-outline'}`}>
-                          {codeValid ? 'OK' : '—'}
+                        <p
+                          className={`text-[10px] font-bold ${codeValid && destinationValid ? 'text-tertiary' : 'text-outline'}`}
+                        >
+                          {codeValid && destinationValid ? 'OK' : '—'}
                         </p>
                       </div>
                 </div>

@@ -3,6 +3,7 @@ import { io } from 'socket.io-client';
 const baseUrl = process.env.BASE_URL ?? 'http://localhost:3001';
 const apiKey = process.env.API_KEY ?? '';
 const sendPhone = process.env.SEND_PHONE ?? '';
+const sendChatJid = process.env.SEND_CHAT_JID ?? '';
 const sendText = process.env.SEND_TEXT ?? '';
 
 if (!apiKey) {
@@ -20,10 +21,13 @@ const socket = io(baseUrl, {
 socket.on('connect', () => {
   console.log(`[socket] connected: ${socket.id}`);
 
-  if (sendPhone && sendText) {
+  if (sendText && (sendPhone || sendChatJid)) {
+    const payload = sendPhone
+      ? { phoneNumber: sendPhone, text: sendText }
+      : { chatJid: sendChatJid, text: sendText };
     socket.emit(
       'whatsapp.message.send',
-      { phoneNumber: sendPhone, text: sendText },
+      payload,
       (ack) => {
         console.log('[ack] whatsapp.message.send');
         console.log(JSON.stringify(ack, null, 2));

@@ -25,6 +25,7 @@ export interface IWhatsAppSessionClient {
   isReady(): boolean;
   getLatestQr(): string | null;
   sendOtp(phoneNumber: string, code: string): Promise<void>;
+  sendTextToJid(chatJid: string, text: string): Promise<void>;
   sendMedia(input: WhatsAppMediaSendInput): Promise<void>;
   updateProfilePhoto(imageBuffer: Buffer, mimeType: string): Promise<void>;
   getProfilePhotoUrl(): Promise<string | null>;

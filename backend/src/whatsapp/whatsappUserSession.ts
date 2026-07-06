@@ -22,6 +22,7 @@ import {
   extractReplyFromMessage,
   extractTextFromProtoMessage,
   getProtoMessageType,
+  normalizeOutboundChatJid,
   resolveIncomingRouting,
 } from './whatsappMessageMeta';
 
@@ -283,6 +284,25 @@ export class WhatsAppUserSession implements IWhatsAppSessionClient {
   }
 
   async sendOtp(phoneNumber: string, code: string): Promise<void> {
+    const digits = digitsOnly(phoneNumber);
+    if (digits.length < 8 || digits.length > 15) {
+      throw new AppError('Número inválido ou sem WhatsApp.', 400);
+    }
+    await this.sendTextToJid(`${digits}@s.whatsapp.net`, buildOtpMessage(code), {
+      logLabel: 'OTP',
+      logContext: { phoneNumber, codePreview: maskCode(code) },
+    });
+  }
+
+  /**
+   * Envia texto para um JID (`@s.whatsapp.net`, `@lid`, `@g.us`) ou telefone normalizado.
+   * Necessário quando o WhatsApp não expõe o número (ex. contas com `@lid`).
+   */
+  async sendTextToJid(
+    chatJid: string,
+    text: string,
+    opts?: { logLabel?: string; logContext?: Record<string, unknown> }
+  ): Promise<void> {
     if (!this.ready || !this.sock) {
       throw new AppError(
         'Serviço WhatsApp indisponível. Aguarde a conexão ou escaneie o QR code no painel.',
@@ -290,24 +310,49 @@ export class WhatsAppUserSession implements IWhatsAppSessionClient {
       );
     }
 
-    this.log.info(
-      { phoneNumber, codePreview: maskCode(code) },
-      'WhatsApp: tentativa de envio de OTP'
-    );
-
-    const digits = digitsOnly(phoneNumber);
-    if (digits.length < 8 || digits.length > 15) {
-      throw new AppError('Número inválido ou sem WhatsApp.', 400);
+    const trimmedText = text.trim();
+    if (trimmedText.length < 1 || trimmedText.length > 200) {
+      throw new AppError('Texto inválido.', 400);
     }
 
-    const jid = `${digits}@s.whatsapp.net`;
+    const normalizedJid = normalizeOutboundChatJid(chatJid);
+    if (!normalizedJid) {
+      throw new AppError('Destino inválido. Use phoneNumber ou chatJid (@s.whatsapp.net, @lid, @g.us).', 400);
+    }
+
+    const logLabel = opts?.logLabel ?? 'mensagem';
+    const logContext = { chatJid: normalizedJid, ...opts?.logContext };
+    this.log.info(logContext, `WhatsApp: tentativa de envio de ${logLabel}`);
+
+    const targetJid = await this.resolveOutboundTargetJid(normalizedJid);
+
+    try {
+      await this.sock.sendMessage(targetJid, { text: trimmedText });
+      this.log.info(logContext, `WhatsApp: ${logLabel} enviado com sucesso`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.log.error({ err: message, ...logContext }, `WhatsApp: falha ao enviar ${logLabel}`);
+      if (this.looksLikeInvalidNumberError(message)) {
+        throw new AppError('Destino inválido para envio no WhatsApp.', 400);
+      }
+      throw new AppError(
+        'Serviço WhatsApp indisponível ao enviar a mensagem.',
+        503
+      );
+    }
+  }
+
+  private async resolveOutboundTargetJid(normalizedJid: string): Promise<string> {
+    if (normalizedJid.endsWith('@lid') || normalizedJid.endsWith('@g.us')) {
+      return normalizedJid;
+    }
 
     let registered;
     try {
-      registered = await this.sock.onWhatsApp(jid);
+      registered = await this.sock!.onWhatsApp(normalizedJid);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.log.error({ err: message }, 'WhatsApp: erro ao verificar número');
+      this.log.error({ err: message, chatJid: normalizedJid }, 'WhatsApp: erro ao verificar destino');
       throw new AppError(
         'Serviço WhatsApp indisponível. Tente novamente em instantes.',
         503
@@ -315,32 +360,12 @@ export class WhatsAppUserSession implements IWhatsAppSessionClient {
     }
 
     const row = registered?.[0];
-    if (!row || !row.exists) {
-      this.log.warn({ phoneNumber }, 'WhatsApp: número não registrado no WhatsApp');
-      throw new AppError('Número não possui WhatsApp.', 400);
+    if (!row?.exists) {
+      this.log.warn({ chatJid: normalizedJid }, 'WhatsApp: destino não registrado no WhatsApp');
+      throw new AppError('Destino não possui WhatsApp.', 400);
     }
 
-    const targetJid = row.jid;
-
-    const text = buildOtpMessage(code);
-
-    try {
-      await this.sock.sendMessage(targetJid, { text });
-      this.log.info(
-        { phoneNumber, codePreview: maskCode(code) },
-        'WhatsApp: OTP enviado com sucesso'
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.log.error({ err: message, phoneNumber }, 'WhatsApp: falha ao enviar mensagem');
-      if (this.looksLikeInvalidNumberError(message)) {
-        throw new AppError('Número inválido para envio no WhatsApp.', 400);
-      }
-      throw new AppError(
-        'Serviço WhatsApp indisponível ao enviar a mensagem.',
-        503
-      );
-    }
+    return row.jid;
   }
 
   async sendMedia(input: WhatsAppMediaSendInput): Promise<void> {
