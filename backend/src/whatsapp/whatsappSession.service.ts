@@ -27,6 +27,7 @@ import {
   listSavedContactsForUser,
   upsertContacts,
 } from '../services/whatsappContact.service';
+import { getSavedGroupSubject, upsertGroupSubject } from '../services/whatsappGroup.service';
 import type { IWhatsAppSessionClient, WhatsAppProvider } from './whatsapp.provider';
 
 function delay(ms: number): Promise<void> {
@@ -96,6 +97,16 @@ export class WhatsAppSessionService implements IWhatsAppSessionService {
       dataPath,
       connectTimeoutMs: this.options.connectTimeoutMs,
       onIncomingMessage: (payload) => {
+        if (payload.chatName?.trim() && payload.chatJid?.endsWith('@g.us')) {
+          void upsertGroupSubject(userId, instanceId, payload.chatJid, payload.chatName).catch(
+            (err) => {
+              this.log.warn(
+                { err: err instanceof Error ? err.message : String(err), userId, instanceId },
+                'WhatsApp: falha ao gravar nome do grupo da mensagem'
+              );
+            }
+          );
+        }
         this.log.info(
           { payload: incomingPayloadForLog(payload) },
           'WhatsApp: payload de mensagem recebida'
@@ -250,15 +261,26 @@ export class WhatsAppSessionService implements IWhatsAppSessionService {
     instanceId: string,
     jid: string
   ): Promise<{ jid: string; subject: string | null }> {
+    const saved = await getSavedGroupSubject(userId, instanceId, jid);
+    if (saved) {
+      return { jid, subject: saved };
+    }
+
     const session = this.sessions.get(this.sessionKey(userId, instanceId));
     if (!session) {
-      throw new AppError(
-        'WhatsApp não iniciado. Use o painel para conectar (Gerar QR) antes de consultar o grupo.',
-        503
-      );
+      return { jid, subject: null };
     }
-    const subject = await session.getGroupSubject(jid);
-    return { jid, subject };
+
+    try {
+      const subject = await session.getGroupSubject(jid);
+      return { jid, subject };
+    } catch (err) {
+      this.log.warn(
+        { err: err instanceof Error ? err.message : String(err), userId, instanceId, jid },
+        'WhatsApp: falha ao consultar nome do grupo em tempo real'
+      );
+      return { jid, subject: null };
+    }
   }
 
   async sendOtp(

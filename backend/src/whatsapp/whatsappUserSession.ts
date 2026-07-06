@@ -27,6 +27,7 @@ import {
   normalizeOutboundChatJid,
   resolveIncomingRouting,
 } from './whatsappMessageMeta';
+import { upsertGroupSubject } from '../services/whatsappGroup.service';
 
 export type WhatsAppContactChangePartial = {
   jid: string;
@@ -172,6 +173,22 @@ export class WhatsAppUserSession implements IWhatsAppSessionClient {
         emitContacts(list as Parameters<typeof emitContacts>[0]);
       });
 
+      const persistGroupSubject = (jid: string | undefined, subject: string | undefined) => {
+        this.persistGroupSubject(jid, subject);
+      };
+
+      sock.ev.on('groups.upsert', (groups) => {
+        for (const group of groups) {
+          persistGroupSubject(group.id, group.subject);
+        }
+      });
+
+      sock.ev.on('groups.update', (updates) => {
+        for (const group of updates) {
+          persistGroupSubject(group.id, group.subject);
+        }
+      });
+
       sock.ev.on('messages.upsert', async (update) => {
         if (update.type !== 'notify') return;
         for (const msg of update.messages) {
@@ -222,6 +239,7 @@ export class WhatsAppUserSession implements IWhatsAppSessionClient {
           this.ready = true;
           this.latestQr = null;
           this.log.info('WhatsApp: cliente pronto (Baileys)');
+          void this.syncAllGroupSubjects();
         }
 
         if (connection === 'close') {
@@ -615,6 +633,39 @@ export class WhatsAppUserSession implements IWhatsAppSessionClient {
     return (await this.resolveGroupSubject(jid)) ?? null;
   }
 
+  private persistGroupSubject(jid: string | undefined, subject: string | undefined): void {
+    const trimmed = subject?.trim();
+    if (!jid?.endsWith('@g.us') || !trimmed) return;
+    this.groupSubjectCache.set(jid, trimmed);
+    void upsertGroupSubject(this.options.userId, this.options.instanceId, jid, trimmed).catch(
+      (err) => {
+        this.log.warn(
+          { err: err instanceof Error ? err.message : String(err), jid },
+          'WhatsApp: falha ao gravar nome do grupo'
+        );
+      }
+    );
+  }
+
+  private async syncAllGroupSubjects(): Promise<void> {
+    if (!this.sock) return;
+    try {
+      const groups = await this.sock.groupFetchAllParticipating();
+      for (const [jid, meta] of Object.entries(groups)) {
+        this.persistGroupSubject(jid, meta.subject);
+      }
+      this.log.info(
+        { count: Object.keys(groups).length },
+        'WhatsApp: nomes de grupos sincronizados'
+      );
+    } catch (err) {
+      this.log.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        'WhatsApp: falha ao sincronizar nomes de grupos'
+      );
+    }
+  }
+
   private async resolveGroupSubject(groupJid: string): Promise<string | undefined> {
     const cached = this.groupSubjectCache.get(groupJid);
     if (cached) return cached;
@@ -625,6 +676,7 @@ export class WhatsAppUserSession implements IWhatsAppSessionClient {
       const subject = meta.subject?.trim();
       if (subject) {
         this.groupSubjectCache.set(groupJid, subject);
+        this.persistGroupSubject(groupJid, subject);
         return subject;
       }
     } catch (err) {
