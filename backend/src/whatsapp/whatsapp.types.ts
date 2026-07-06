@@ -144,6 +144,8 @@ export type WhatsAppIncomingMessageEvent = {
   isGroup: boolean;
   chatJid: string;
   senderJid: string;
+  /** Nome/título do grupo (`groupMetadata.subject`) quando `isGroup` é true. */
+  chatName?: string;
   reply?: WhatsAppIncomingMessageReply;
   media?: {
     fileBuffer?: Buffer;
@@ -151,6 +153,11 @@ export type WhatsAppIncomingMessageEvent = {
     fileName?: string;
     size?: number;
   };
+};
+
+export type WhatsAppGroupMetadataBody = {
+  jid: string;
+  subject: string | null;
 };
 
 export type WhatsAppConversationMessage = {
@@ -197,6 +204,7 @@ export interface IWhatsAppSessionService {
   ): Promise<void>;
   getProfilePhotoUrl(userId: string, instanceId: string): Promise<string | null>;
   getContactProfilePhotoUrl(userId: string, instanceId: string, jid: string): Promise<string | null>;
+  getGroupMetadata(userId: string, instanceId: string, jid: string): Promise<WhatsAppGroupMetadataBody>;
   /** Cota (plano grátis) e registo de sucesso em histórico aplicam-se aqui. */
   sendOtp(
     userId: string,

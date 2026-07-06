@@ -52,6 +52,7 @@ function incomingPayloadForLog(payload: WhatsAppIncomingMessageEvent): Record<st
     isGroup: payload.isGroup,
     chatJid: payload.chatJid,
     senderJid: payload.senderJid,
+    ...(payload.chatName ? { chatName: payload.chatName } : {}),
     ...(payload.reply ? { reply: payload.reply } : {}),
     ...(media
       ? {
@@ -242,6 +243,22 @@ export class WhatsAppSessionService implements IWhatsAppSessionService {
       );
     }
     return session.getContactProfilePhotoUrl(jid);
+  }
+
+  async getGroupMetadata(
+    userId: string,
+    instanceId: string,
+    jid: string
+  ): Promise<{ jid: string; subject: string | null }> {
+    const session = this.sessions.get(this.sessionKey(userId, instanceId));
+    if (!session) {
+      throw new AppError(
+        'WhatsApp não iniciado. Use o painel para conectar (Gerar QR) antes de consultar o grupo.',
+        503
+      );
+    }
+    const subject = await session.getGroupSubject(jid);
+    return { jid, subject };
   }
 
   async sendOtp(

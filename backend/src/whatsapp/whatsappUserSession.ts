@@ -91,6 +91,7 @@ export class WhatsAppUserSession implements IWhatsAppSessionClient {
   private recoveringFromLogout = false;
   /** Evita reconexão automática e limpeza agressiva quando o utilizador pede desconexão no painel. */
   private intentionalClose = false;
+  private readonly groupSubjectCache = new Map<string, string>();
 
   constructor(
     private readonly log: Logger,
@@ -181,6 +182,10 @@ export class WhatsAppUserSession implements IWhatsAppSessionClient {
           const media = await this.extractIncomingMedia(msg);
           const routing = resolveIncomingRouting(msg);
           const reply = extractReplyFromMessage(msg.message);
+          const chatName =
+            routing.isGroup && routing.chatJid.endsWith('@g.us')
+              ? await this.resolveGroupSubject(routing.chatJid)
+              : undefined;
           const payload: WhatsAppIncomingMessageEvent = {
             messageId: msg.key.id ?? `msg_${Date.now()}`,
             from: routing.from,
@@ -195,6 +200,7 @@ export class WhatsAppUserSession implements IWhatsAppSessionClient {
             isGroup: routing.isGroup,
             chatJid: routing.chatJid,
             senderJid: routing.senderJid,
+            ...(chatName ? { chatName } : {}),
             ...(reply ? { reply } : {}),
             media,
           };
@@ -594,6 +600,40 @@ export class WhatsAppUserSession implements IWhatsAppSessionClient {
       );
     }
     return this.fetchProfilePhotoUrlForJid(jid, 'contacto');
+  }
+
+  async getGroupSubject(jid: string): Promise<string | null> {
+    if (!jid.endsWith('@g.us')) {
+      throw new AppError('JID de grupo inválido (@g.us).', 400);
+    }
+    if (!this.ready || !this.sock) {
+      throw new AppError(
+        'Serviço WhatsApp indisponível. Aguarde a conexão ou escaneie o QR code no painel.',
+        503
+      );
+    }
+    return (await this.resolveGroupSubject(jid)) ?? null;
+  }
+
+  private async resolveGroupSubject(groupJid: string): Promise<string | undefined> {
+    const cached = this.groupSubjectCache.get(groupJid);
+    if (cached) return cached;
+    if (!this.sock) return undefined;
+
+    try {
+      const meta = await this.sock.groupMetadata(groupJid);
+      const subject = meta.subject?.trim();
+      if (subject) {
+        this.groupSubjectCache.set(groupJid, subject);
+        return subject;
+      }
+    } catch (err) {
+      this.log.warn(
+        { err: err instanceof Error ? err.message : String(err), groupJid },
+        'WhatsApp: falha ao obter nome do grupo'
+      );
+    }
+    return undefined;
   }
 
   private async fetchProfilePhotoUrlForJid(

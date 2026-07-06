@@ -31,6 +31,7 @@ export interface IWhatsAppSessionClient {
   updateProfilePhoto(imageBuffer: Buffer, mimeType: string): Promise<void>;
   getProfilePhotoUrl(): Promise<string | null>;
   getContactProfilePhotoUrl(jid: string): Promise<string | null>;
+  getGroupSubject(jid: string): Promise<string | null>;
   listConversationMessages(
     jid: string,
     opts?: { limit?: number; beforeMessageId?: string }

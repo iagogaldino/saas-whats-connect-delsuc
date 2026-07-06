@@ -124,6 +124,21 @@ export function createWhatsAppRouter(
     }
   });
 
+  router.get('/groups/:jid', async (req, res, next) => {
+    try {
+      const userId = req.user!.id;
+      const instanceId = req.instance!.id;
+      const jid = toConversationJid(req.params.jid || '');
+      if (!jid.endsWith('@g.us')) {
+        return next(new AppError('JID de grupo inválido (@g.us).', 400));
+      }
+      const metadata = await manager.getGroupMetadata(userId, instanceId, jid);
+      res.status(200).json(metadata);
+    } catch (e) {
+      next(e);
+    }
+  });
+
   router.get('/conversations/:jid/messages', async (req, res, next) => {
     try {
       const parsed = conversationMessagesQuerySchema.safeParse(req.query);
