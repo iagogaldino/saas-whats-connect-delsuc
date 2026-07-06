@@ -7,6 +7,7 @@ import type {
   WhatsAppContact,
   WhatsAppIncomingMessageEvent,
   WhatsAppMediaSendInput,
+  WhatsAppOutboundReplyQuote,
   WhatsAppSessionServiceBootstrapOptions,
 } from './whatsapp.types';
 import { SocketGateway } from '../realtime/socketGateway';
@@ -243,7 +244,13 @@ export class WhatsAppSessionService implements IWhatsAppSessionService {
     return session.getContactProfilePhotoUrl(jid);
   }
 
-  async sendOtp(userId: string, instanceId: string, phoneNumber: string, code: string): Promise<void> {
+  async sendOtp(
+    userId: string,
+    instanceId: string,
+    phoneNumber: string,
+    code: string,
+    replyTo?: WhatsAppOutboundReplyQuote
+  ): Promise<void> {
     const session = this.sessions.get(this.sessionKey(userId, instanceId));
     if (!session) {
       throw new AppError(
@@ -254,7 +261,7 @@ export class WhatsAppSessionService implements IWhatsAppSessionService {
     await assertFreePlanCanSend(userId);
     const persistEnabled = await this.shouldPersistMessages(userId, instanceId);
     try {
-      await session.sendOtp(phoneNumber, code);
+      await session.sendOtp(phoneNumber, code, replyTo);
       if (persistEnabled) {
         await recordSend(userId, instanceId, phoneNumber, 'success', undefined, code).catch(() => {
           /* não re-lança; envio WhatsApp já concluiu */
@@ -270,7 +277,13 @@ export class WhatsAppSessionService implements IWhatsAppSessionService {
     }
   }
 
-  async sendTextToJid(userId: string, instanceId: string, chatJid: string, text: string): Promise<void> {
+  async sendTextToJid(
+    userId: string,
+    instanceId: string,
+    chatJid: string,
+    text: string,
+    replyTo?: WhatsAppOutboundReplyQuote
+  ): Promise<void> {
     const session = this.sessions.get(this.sessionKey(userId, instanceId));
     if (!session) {
       throw new AppError(
@@ -282,7 +295,7 @@ export class WhatsAppSessionService implements IWhatsAppSessionService {
     const persistEnabled = await this.shouldPersistMessages(userId, instanceId);
     const historyKey = chatJid.split('@')[0] ?? chatJid;
     try {
-      await session.sendTextToJid(chatJid, text);
+      await session.sendTextToJid(chatJid, text, replyTo);
       if (persistEnabled) {
         await recordSend(userId, instanceId, historyKey, 'success', undefined, text).catch(() => {
           /* não re-lança; envio WhatsApp já concluiu */

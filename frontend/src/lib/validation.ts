@@ -24,6 +24,21 @@ export function validateChatJid(raw: string): string | null {
   return null;
 }
 
+export function validateReplyTo(input: {
+  messageId: string;
+  chatJid: string;
+}): string | null {
+  const messageId = input.messageId.trim();
+  if (!messageId) {
+    return 'replyTo: informe o messageId da mensagem a citar.';
+  }
+  const errJid = validateChatJid(input.chatJid);
+  if (errJid) {
+    return errJid.replace('Chat JID', 'replyTo.chatJid');
+  }
+  return null;
+}
+
 export function validateCode(code: string): string | null {
   const t = code.trim();
   if (t.length < 1) {

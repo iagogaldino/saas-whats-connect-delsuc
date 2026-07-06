@@ -295,14 +295,14 @@ export function createAuthRouter(whatsappSessions: IWhatsAppSessionService): Rou
         return next(parsed.error);
       }
 
-      const { phoneNumber, chatJid, message } = parsed.data;
+      const { phoneNumber, chatJid, message, replyTo } = parsed.data;
       const userId = req.user!.id;
       const instanceId = req.instance!.id;
 
       if (chatJid) {
-        await whatsappSessions.sendTextToJid(userId, instanceId, chatJid, message);
+        await whatsappSessions.sendTextToJid(userId, instanceId, chatJid, message, replyTo);
       } else {
-        await whatsappSessions.sendOtp(userId, instanceId, phoneNumber!, message);
+        await whatsappSessions.sendOtp(userId, instanceId, phoneNumber!, message, replyTo);
       }
       res.status(200).json({ ok: true, message: 'Código enviado' });
     } catch (e) {

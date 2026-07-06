@@ -86,6 +86,20 @@ Corpo JSON — informe **phoneNumber** ou **chatJid** (não ambos):
 
 - `phoneNumber`: 10 a 15 dígitos, quando o remetente expõe telefone (`from` no evento recebido).
 - `chatJid`: JID completo (`@s.whatsapp.net`, `@lid`, `@g.us`) — obrigatório quando `from` vem vazio ou para grupos.
+- `replyTo` (opcional): cita mensagem recebida no WhatsApp (`messageId`, `chatJid`, `participant?`, `text?`).
+
+```json
+{
+  "chatJid": "123093813043447@lid",
+  "message": "Recebemos sua mensagem!",
+  "replyTo": {
+    "messageId": "3EB05A3E243FFBE25B02E5",
+    "chatJid": "123093813043447@lid",
+    "participant": "123093813043447@lid",
+    "text": "iago"
+  }
+}
+```
 
 - Respostas **400**: payload inválido, destino inválido ou sem WhatsApp.
 - Respostas **503**: cliente WhatsApp não inicializado ou não conectado (aguarde o QR ou reconexão).

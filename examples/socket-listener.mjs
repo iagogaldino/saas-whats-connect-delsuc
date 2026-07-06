@@ -5,6 +5,10 @@ const apiKey = process.env.API_KEY ?? '';
 const sendPhone = process.env.SEND_PHONE ?? '';
 const sendChatJid = process.env.SEND_CHAT_JID ?? '';
 const sendText = process.env.SEND_TEXT ?? '';
+const sendReplyMessageId = process.env.SEND_REPLY_MESSAGE_ID ?? '';
+const sendReplyChatJid = process.env.SEND_REPLY_CHAT_JID ?? '';
+const sendReplyParticipant = process.env.SEND_REPLY_PARTICIPANT ?? '';
+const sendReplyText = process.env.SEND_REPLY_TEXT ?? '';
 
 if (!apiKey) {
   console.error('Missing API_KEY. Example: API_KEY=otp_xxx_xxx node socket-listener.mjs');
@@ -25,6 +29,14 @@ socket.on('connect', () => {
     const payload = sendPhone
       ? { phoneNumber: sendPhone, text: sendText }
       : { chatJid: sendChatJid, text: sendText };
+    if (sendReplyMessageId && sendReplyChatJid) {
+      payload.replyTo = {
+        messageId: sendReplyMessageId,
+        chatJid: sendReplyChatJid,
+        ...(sendReplyParticipant ? { participant: sendReplyParticipant } : {}),
+        ...(sendReplyText ? { text: sendReplyText } : {}),
+      };
+    }
     socket.emit(
       'whatsapp.message.send',
       payload,

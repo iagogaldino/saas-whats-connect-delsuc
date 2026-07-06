@@ -10,6 +10,7 @@ export type {
   WhatsAppListeningStatusBody,
   WhatsAppIncomingMessageEvent,
   WhatsAppIncomingMessageReply,
+  WhatsAppOutboundReplyQuote,
   WhatsAppContact,
   WhatsAppContactsBody,
   WhatsAppConversationMessage,

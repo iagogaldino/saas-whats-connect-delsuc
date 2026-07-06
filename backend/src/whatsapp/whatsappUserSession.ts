@@ -16,9 +16,11 @@ import type {
   WhatsAppConversationMessagesBody,
   WhatsAppIncomingMessageEvent,
   WhatsAppMediaSendInput,
+  WhatsAppOutboundReplyQuote,
 } from './whatsapp.types';
 import type { IWhatsAppSessionClient } from './whatsapp.provider';
 import {
+  buildQuotedWAMessage,
   extractReplyFromMessage,
   extractTextFromProtoMessage,
   getProtoMessageType,
@@ -283,15 +285,16 @@ export class WhatsAppUserSession implements IWhatsAppSessionClient {
     await rm(this.options.dataPath, { recursive: true, force: true }).catch(() => {});
   }
 
-  async sendOtp(phoneNumber: string, code: string): Promise<void> {
+  async sendOtp(phoneNumber: string, code: string, replyTo?: WhatsAppOutboundReplyQuote): Promise<void> {
     const digits = digitsOnly(phoneNumber);
     if (digits.length < 8 || digits.length > 15) {
       throw new AppError('Número inválido ou sem WhatsApp.', 400);
     }
-    await this.sendTextToJid(`${digits}@s.whatsapp.net`, buildOtpMessage(code), {
-      logLabel: 'OTP',
-      logContext: { phoneNumber, codePreview: maskCode(code) },
-    });
+    this.log.info(
+      { phoneNumber, codePreview: maskCode(code), replyTo: replyTo?.messageId },
+      'WhatsApp: tentativa de envio de OTP'
+    );
+    await this.sendTextToJid(`${digits}@s.whatsapp.net`, buildOtpMessage(code), replyTo);
   }
 
   /**
@@ -301,7 +304,7 @@ export class WhatsAppUserSession implements IWhatsAppSessionClient {
   async sendTextToJid(
     chatJid: string,
     text: string,
-    opts?: { logLabel?: string; logContext?: Record<string, unknown> }
+    replyTo?: WhatsAppOutboundReplyQuote
   ): Promise<void> {
     if (!this.ready || !this.sock) {
       throw new AppError(
@@ -320,18 +323,31 @@ export class WhatsAppUserSession implements IWhatsAppSessionClient {
       throw new AppError('Destino inválido. Use phoneNumber ou chatJid (@s.whatsapp.net, @lid, @g.us).', 400);
     }
 
-    const logLabel = opts?.logLabel ?? 'mensagem';
-    const logContext = { chatJid: normalizedJid, ...opts?.logContext };
-    this.log.info(logContext, `WhatsApp: tentativa de envio de ${logLabel}`);
+    const logContext = { chatJid: normalizedJid, replyTo: replyTo?.messageId };
+    this.log.info(logContext, 'WhatsApp: tentativa de envio de mensagem');
 
     const targetJid = await this.resolveOutboundTargetJid(normalizedJid);
 
+    let quoted: proto.IWebMessageInfo | undefined;
+    if (replyTo) {
+      try {
+        quoted = buildQuotedWAMessage(replyTo);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        throw new AppError(message || 'replyTo inválido.', 400);
+      }
+    }
+
     try {
-      await this.sock.sendMessage(targetJid, { text: trimmedText });
-      this.log.info(logContext, `WhatsApp: ${logLabel} enviado com sucesso`);
+      await this.sock.sendMessage(
+        targetJid,
+        { text: trimmedText },
+        quoted ? { quoted } : undefined
+      );
+      this.log.info(logContext, 'WhatsApp: mensagem enviada com sucesso');
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.log.error({ err: message, ...logContext }, `WhatsApp: falha ao enviar ${logLabel}`);
+      this.log.error({ err: message, ...logContext }, 'WhatsApp: falha ao enviar mensagem');
       if (this.looksLikeInvalidNumberError(message)) {
         throw new AppError('Destino inválido para envio no WhatsApp.', 400);
       }

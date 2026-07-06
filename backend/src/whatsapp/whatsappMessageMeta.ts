@@ -1,5 +1,8 @@
 import type { proto } from '@whiskeysockets/baileys';
-import type { WhatsAppIncomingMessageReply } from './whatsapp.types';
+import type {
+  WhatsAppIncomingMessageReply,
+  WhatsAppOutboundReplyQuote,
+} from './whatsapp.types';
 
 type MessageKeyWithPn = proto.IMessageKey & { participantPn?: string };
 
@@ -111,5 +114,57 @@ export function extractReplyFromMessage(
     quotedParticipant: ctx.participant ?? null,
     quotedText: extractTextFromProtoMessage(quoted ?? undefined),
     quotedType: getProtoMessageType(quoted ?? undefined),
+  };
+}
+
+/** Monta `replyTo` a partir de um `whatsapp.message.received` para reutilizar no envio. */
+export function buildReplyToFromIncoming(event: {
+  messageId: string;
+  chatJid: string;
+  senderJid: string;
+  text: string;
+}): WhatsAppOutboundReplyQuote {
+  return {
+    messageId: event.messageId,
+    chatJid: event.chatJid,
+    participant: event.senderJid || null,
+    text: event.text?.trim() || undefined,
+  };
+}
+
+function buildQuotedProtoMessage(text?: string): proto.IMessage {
+  const t = (text ?? '').trim();
+  if (!t) {
+    return { conversation: '\u200b' };
+  }
+  return { conversation: t };
+}
+
+/** Constrói WAMessage mínimo para `{ quoted }` do Baileys. */
+export function buildQuotedWAMessage(quote: WhatsAppOutboundReplyQuote): proto.IWebMessageInfo {
+  const messageId = quote.messageId.trim();
+  if (!messageId) {
+    throw new Error('replyTo.messageId é obrigatório');
+  }
+
+  const chatJid = normalizeOutboundChatJid(quote.chatJid);
+  if (!chatJid) {
+    throw new Error('replyTo.chatJid inválido');
+  }
+
+  const key: proto.IMessageKey = {
+    remoteJid: chatJid,
+    fromMe: false,
+    id: messageId,
+  };
+
+  const participant = quote.participant?.trim();
+  if (participant && isGroupChatJid(chatJid)) {
+    key.participant = participant;
+  }
+
+  return {
+    key,
+    message: buildQuotedProtoMessage(quote.text),
   };
 }

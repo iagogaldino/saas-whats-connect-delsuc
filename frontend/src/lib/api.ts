@@ -58,10 +58,18 @@ export type WebhookTestResponse = {
   status: number;
 };
 
+export type OutboundReplyQuote = {
+  messageId: string;
+  chatJid: string;
+  participant?: string | null;
+  text?: string;
+};
+
 export type SendCodeBody = {
   phoneNumber?: string;
   chatJid?: string;
   message: string;
+  replyTo?: OutboundReplyQuote;
 };
 
 export type SendMediaBody = {

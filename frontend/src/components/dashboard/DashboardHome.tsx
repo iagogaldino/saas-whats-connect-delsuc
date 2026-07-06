@@ -21,7 +21,8 @@ import {
   postWebhookTestForInstance,
   updateMessagePersistenceForInstance,
 } from '../../lib/api';
-import { validateChatJid, validateCode, validatePhone } from '../../lib/validation';
+import { validateChatJid, validateCode, validatePhone, validateReplyTo } from '../../lib/validation';
+import type { OutboundReplyQuote } from '../../lib/api';
 import { Icon } from './Icon';
 
 function formatSyncTime(): string {
@@ -46,6 +47,11 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
   const [phone, setPhone] = useState('');
   const [chatJid, setChatJid] = useState('');
   const [code, setCode] = useState('');
+  const [replyEnabled, setReplyEnabled] = useState(false);
+  const [replyMessageId, setReplyMessageId] = useState('');
+  const [replyChatJid, setReplyChatJid] = useState('');
+  const [replyParticipant, setReplyParticipant] = useState('');
+  const [replyQuotedText, setReplyQuotedText] = useState('');
 
   const [apiOnline, setApiOnline] = useState<boolean | null>(null);
   const [whatsappReady, setWhatsappReady] = useState<boolean | null>(null);
@@ -100,6 +106,25 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
     destinationMode === 'phone'
       ? validatePhone(digitsPhone) === null
       : validateChatJid(chatJidTrimmed) === null;
+  const replyValid =
+    !replyEnabled ||
+    validateReplyTo({
+      messageId: replyMessageId,
+      chatJid: replyChatJid,
+    }) === null;
+  const formValid = codeValid && destinationValid && replyValid;
+
+  function buildReplyToPayload(): OutboundReplyQuote | undefined {
+    if (!replyEnabled) return undefined;
+    const participant = replyParticipant.trim();
+    const text = replyQuotedText.trim();
+    return {
+      messageId: replyMessageId.trim(),
+      chatJid: replyChatJid.trim(),
+      ...(participant ? { participant } : {}),
+      ...(text ? { text } : {}),
+    };
+  }
 
   useEffect(() => {
     if (!profilePhotoFile) {
@@ -491,10 +516,13 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
     const errDestination =
       destinationMode === 'phone' ? validatePhone(digitsPhone) : validateChatJid(chatJidTrimmed);
     const errCode = validateCode(code);
-    if (errDestination || errCode) {
+    const errReply = replyEnabled
+      ? validateReplyTo({ messageId: replyMessageId, chatJid: replyChatJid })
+      : null;
+    if (errDestination || errCode || errReply) {
       setResponseLog(
         JSON.stringify(
-          { error: 'validation', messages: [errDestination, errCode].filter(Boolean) },
+          { error: 'validation', messages: [errDestination, errCode, errReply].filter(Boolean) },
           null,
           2
         )
@@ -502,13 +530,15 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
       return;
     }
 
+    const replyTo = buildReplyToPayload();
+
     setSendLoading(true);
     try {
       const res = await sendCode(
         instanceId,
         destinationMode === 'phone'
-          ? { phoneNumber: digitsPhone, message: codeTrimmed }
-          : { chatJid: chatJidTrimmed, message: codeTrimmed }
+          ? { phoneNumber: digitsPhone, message: codeTrimmed, replyTo }
+          : { chatJid: chatJidTrimmed, message: codeTrimmed, replyTo }
       );
       setResponseLog(JSON.stringify({ ok: true, status: 200, body: res }, null, 2));
     } catch (err) {
@@ -538,6 +568,11 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
     setPhone('');
     setChatJid('');
     setCode('');
+    setReplyEnabled(false);
+    setReplyMessageId('');
+    setReplyChatJid('');
+    setReplyParticipant('');
+    setReplyQuotedText('');
   }
 
   const showConnectCta =
@@ -985,11 +1020,77 @@ export function DashboardHome({ instanceId, instanceName, instanceCode }: Dashbo
                       <div className="mt-2 flex justify-between">
                         <p className="text-outline text-[10px]">Até 200 caracteres por mensagem.</p>
                         <p
-                          className={`text-[10px] font-bold ${codeValid && destinationValid ? 'text-tertiary' : 'text-outline'}`}
+                          className={`text-[10px] font-bold ${formValid ? 'text-tertiary' : 'text-outline'}`}
                         >
-                          {codeValid && destinationValid ? 'OK' : '—'}
+                          {formValid ? 'OK' : '—'}
                         </p>
                       </div>
+                </div>
+                <div className="col-span-full md:col-span-2 rounded-lg border border-outline-variant/15 p-4">
+                  <label className="text-on-surface flex cursor-pointer items-center gap-2 text-sm font-medium">
+                    <input
+                      type="checkbox"
+                      checked={replyEnabled}
+                      onChange={(e) => setReplyEnabled(e.target.checked)}
+                      className="accent-primary"
+                    />
+                    Responder citando mensagem recebida
+                  </label>
+                  {replyEnabled && (
+                    <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <div>
+                        <label className="text-outline mb-2 block text-[10px] font-black uppercase tracking-widest">
+                          replyTo.messageId
+                        </label>
+                        <input
+                          className="focus:ring-primary/20 w-full rounded-lg border-none bg-surface-container-low p-3 font-mono text-sm focus:ring-2"
+                          placeholder="3EB05A3E243FFBE25B02E5"
+                          value={replyMessageId}
+                          onChange={(e) => setReplyMessageId(e.target.value.slice(0, 128))}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-outline mb-2 block text-[10px] font-black uppercase tracking-widest">
+                          replyTo.chatJid
+                        </label>
+                        <input
+                          className="focus:ring-primary/20 w-full rounded-lg border-none bg-surface-container-low p-3 font-mono text-sm focus:ring-2"
+                          placeholder="123093813043447@lid"
+                          value={replyChatJid}
+                          onChange={(e) => setReplyChatJid(e.target.value.slice(0, 128))}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-outline mb-2 block text-[10px] font-black uppercase tracking-widest">
+                          replyTo.participant (opcional)
+                        </label>
+                        <input
+                          className="focus:ring-primary/20 w-full rounded-lg border-none bg-surface-container-low p-3 font-mono text-sm focus:ring-2"
+                          placeholder="senderJid do payload"
+                          value={replyParticipant}
+                          onChange={(e) => setReplyParticipant(e.target.value.slice(0, 128))}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-outline mb-2 block text-[10px] font-black uppercase tracking-widest">
+                          replyTo.text (opcional)
+                        </label>
+                        <input
+                          className="focus:ring-primary/20 w-full rounded-lg border-none bg-surface-container-low p-3 font-mono text-sm focus:ring-2"
+                          placeholder="Texto da mensagem citada"
+                          value={replyQuotedText}
+                          onChange={(e) => setReplyQuotedText(e.target.value.slice(0, 200))}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {replyEnabled && (
+                    <p className="text-outline mt-3 text-[10px]">
+                      Copie do log <span className="font-mono">whatsapp.message.received</span>:{' '}
+                      <span className="font-mono">messageId</span>, <span className="font-mono">chatJid</span>,{' '}
+                      <span className="font-mono">senderJid</span>, <span className="font-mono">text</span>.
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="flex gap-3 pt-4">

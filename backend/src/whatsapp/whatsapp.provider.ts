@@ -3,6 +3,7 @@ import type {
   WhatsAppConversationMessagesBody,
   WhatsAppIncomingMessageEvent,
   WhatsAppMediaSendInput,
+  WhatsAppOutboundReplyQuote,
 } from './whatsapp.types';
 import type { WhatsAppContactChangePartial } from './whatsappUserSession';
 
@@ -24,8 +25,8 @@ export interface IWhatsAppSessionClient {
   destroy(): Promise<void>;
   isReady(): boolean;
   getLatestQr(): string | null;
-  sendOtp(phoneNumber: string, code: string): Promise<void>;
-  sendTextToJid(chatJid: string, text: string): Promise<void>;
+  sendOtp(phoneNumber: string, code: string, replyTo?: WhatsAppOutboundReplyQuote): Promise<void>;
+  sendTextToJid(chatJid: string, text: string, replyTo?: WhatsAppOutboundReplyQuote): Promise<void>;
   sendMedia(input: WhatsAppMediaSendInput): Promise<void>;
   updateProfilePhoto(imageBuffer: Buffer, mimeType: string): Promise<void>;
   getProfilePhotoUrl(): Promise<string | null>;

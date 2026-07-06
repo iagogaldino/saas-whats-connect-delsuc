@@ -62,6 +62,7 @@
  * ## POST /api/v1/auth/instances/:instanceId/send-code
  * - Auth: Bearer
  * - Body: `{ phoneNumber, message }` ou `{ chatJid, message }` (mutuamente exclusivos)
+ * - `replyTo` opcional — cita mensagem recebida no WhatsApp (ver `WhatsAppOutboundReplyQuote`)
  * - `phoneNumber`: 10..15 dígitos (DDI + número)
  * - `chatJid`: JID completo (`@s.whatsapp.net`, `@lid`, `@g.us`) — use quando `from` vier vazio no recebimento
  * - 200: `{ ok: true, message: 'Código enviado' }`
@@ -118,6 +119,18 @@ export type WhatsAppIncomingMessageReply = {
   quotedParticipant: string | null;
   quotedText: string;
   quotedType: string;
+};
+
+/** Citação ao enviar resposta (campo `replyTo` em send-code / socket). */
+export type WhatsAppOutboundReplyQuote = {
+  /** `messageId` da mensagem recebida a citar. */
+  messageId: string;
+  /** `chatJid` da conversa onde a mensagem citada está. */
+  chatJid: string;
+  /** `senderJid` de quem enviou a citada; recomendado em grupos. */
+  participant?: string | null;
+  /** Texto/legenda da citada (melhora o preview no WhatsApp). */
+  text?: string;
 };
 
 export type WhatsAppIncomingMessageEvent = {
@@ -185,9 +198,21 @@ export interface IWhatsAppSessionService {
   getProfilePhotoUrl(userId: string, instanceId: string): Promise<string | null>;
   getContactProfilePhotoUrl(userId: string, instanceId: string, jid: string): Promise<string | null>;
   /** Cota (plano grátis) e registo de sucesso em histórico aplicam-se aqui. */
-  sendOtp(userId: string, instanceId: string, phoneNumber: string, code: string): Promise<void>;
+  sendOtp(
+    userId: string,
+    instanceId: string,
+    phoneNumber: string,
+    code: string,
+    replyTo?: WhatsAppOutboundReplyQuote
+  ): Promise<void>;
   /** Envio por JID quando o telefone não está disponível (`@lid`, `@g.us`, etc.). */
-  sendTextToJid(userId: string, instanceId: string, chatJid: string, text: string): Promise<void>;
+  sendTextToJid(
+    userId: string,
+    instanceId: string,
+    chatJid: string,
+    text: string,
+    replyTo?: WhatsAppOutboundReplyQuote
+  ): Promise<void>;
   /** Envio de arquivo/documento para um número WhatsApp. */
   sendMedia(userId: string, instanceId: string, input: WhatsAppMediaSendInput): Promise<void>;
   destroySession(userId: string, instanceId: string): Promise<void>;

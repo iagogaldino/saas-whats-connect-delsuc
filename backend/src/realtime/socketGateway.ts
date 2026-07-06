@@ -4,7 +4,8 @@ import { Server, type Socket } from 'socket.io';
 import { validateApiKey } from '../services/apiKey.service';
 import { getOwnedInstanceOrThrow } from '../services/instance.service';
 import { normalizeOutboundChatJid } from '../whatsapp/whatsappMessageMeta';
-import type { WhatsAppIncomingMessageEvent } from '../whatsapp';
+import type { WhatsAppIncomingMessageEvent, WhatsAppOutboundReplyQuote } from '../whatsapp';
+import { parseOutboundReplyQuote } from '../validation/outboundReply.schema';
 
 type ListeningState = {
   enabled: boolean;
@@ -15,6 +16,7 @@ type MessageSendPayload = {
   phoneNumber?: string;
   chatJid?: string;
   text: string;
+  replyTo?: WhatsAppOutboundReplyQuote;
 };
 
 type MessageSendAck =
@@ -25,6 +27,7 @@ type SendMessageInput = {
   phoneNumber?: string;
   chatJid?: string;
   text: string;
+  replyTo?: WhatsAppOutboundReplyQuote;
 };
 
 type SendMessageHandler = (
@@ -249,13 +252,22 @@ export class SocketGateway {
     if (!payload || typeof payload !== 'object') {
       return { ok: false, error: 'invalid_payload' };
     }
-    const p = payload as Partial<MessageSendPayload>;
+    const p = payload as Partial<MessageSendPayload> & { replyTo?: unknown };
     const text = (p.text ?? '').trim();
     const phoneNumber = (p.phoneNumber ?? '').replace(/\D/g, '');
     const chatJidRaw = (p.chatJid ?? '').trim();
     const hasPhone = phoneNumber.length >= 10 && phoneNumber.length <= 15;
     const normalizedJid = chatJidRaw ? normalizeOutboundChatJid(chatJidRaw) : null;
     const hasJid = Boolean(normalizedJid);
+
+    let replyTo: WhatsAppOutboundReplyQuote | undefined;
+    if (p.replyTo !== undefined && p.replyTo !== null) {
+      const parsedReply = parseOutboundReplyQuote(p.replyTo);
+      if (!parsedReply.ok) {
+        return { ok: false, error: 'invalid_reply_to' };
+      }
+      replyTo = parsedReply.replyTo;
+    }
 
     if (!hasPhone && !hasJid) {
       return { ok: false, error: 'invalid_destination' };
@@ -268,8 +280,8 @@ export class SocketGateway {
     }
 
     if (hasJid) {
-      return { ok: true, input: { chatJid: normalizedJid!, text } };
+      return { ok: true, input: { chatJid: normalizedJid!, text, replyTo } };
     }
-    return { ok: true, input: { phoneNumber, text } };
+    return { ok: true, input: { phoneNumber, text, replyTo } };
   }
 }

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { normalizeOutboundChatJid } from '../whatsapp/whatsappMessageMeta';
+import { outboundReplyQuoteSchema } from './outboundReply.schema';
 
 function digitsOnly(s: string): string {
   return s.replace(/\D/g, '');
@@ -14,6 +15,7 @@ export const sendCodeBodySchema = z
       .trim()
       .min(1, 'message não pode ser vazio')
       .max(200, 'message deve ter no máximo 200 caracteres'),
+    replyTo: outboundReplyQuoteSchema.optional(),
   })
   .superRefine((data, ctx) => {
     const phone = data.phoneNumber ? digitsOnly(data.phoneNumber) : '';
@@ -39,6 +41,7 @@ export const sendCodeBodySchema = z
       phoneNumber: hasPhone ? phone : undefined,
       chatJid: hasPhone ? undefined : normalizeOutboundChatJid(data.chatJid!.trim())!,
       message: data.message,
+      replyTo: data.replyTo,
     };
   });
 

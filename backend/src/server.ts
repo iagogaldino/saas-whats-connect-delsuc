@@ -78,10 +78,22 @@ socketGateway.setListeningPersistenceHandlers(
 );
 socketGateway.setSendMessageHandler(async (userId, instanceId, input) => {
   if (input.chatJid) {
-    await whatsappSessions.sendTextToJid(userId, instanceId, input.chatJid, input.text);
+    await whatsappSessions.sendTextToJid(
+      userId,
+      instanceId,
+      input.chatJid,
+      input.text,
+      input.replyTo
+    );
     return;
   }
-  await whatsappSessions.sendOtp(userId, instanceId, input.phoneNumber!, input.text);
+  await whatsappSessions.sendOtp(
+    userId,
+    instanceId,
+    input.phoneNumber!,
+    input.text,
+    input.replyTo
+  );
 });
 
 const app = createApp(log, whatsappSessions, webhookDispatcher);

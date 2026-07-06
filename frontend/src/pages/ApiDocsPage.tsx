@@ -668,6 +668,35 @@ Content-Type: application/json
   "message": "Combinado no grupo!"
 }`}</CodeBlock>
           <p className="text-outline text-xs">
+            <strong>replyTo</strong> (opcional) — envia como <strong>resposta citada</strong> no WhatsApp (faixa
+            “respondendo a…”). Use os campos do{' '}
+            <code className="font-mono text-xs">whatsapp.message.received</code> que você quer citar:
+          </p>
+          <CodeBlock>{`type WhatsAppOutboundReplyQuote = {
+  messageId: string;   // messageId da mensagem recebida
+  chatJid: string;     // chatJid da conversa
+  participant?: string | null; // senderJid (recomendado em grupos)
+  text?: string;       // text da mensagem citada (preview)
+};`}</CodeBlock>
+          <p className="text-on-surface text-xs font-semibold">Exemplo — responder citando mensagem recebida</p>
+          <CodeBlock>{`{
+  "chatJid": "123093813043447@lid",
+  "message": "Recebemos sua mensagem!",
+  "replyTo": {
+    "messageId": "3EB05A3E243FFBE25B02E5",
+    "chatJid": "123093813043447@lid",
+    "participant": "123093813043447@lid",
+    "text": "iago"
+  }
+}`}</CodeBlock>
+          <p className="text-outline text-xs">
+            No socket, o campo equivalente é <code className="font-mono text-xs">replyTo</code> em{' '}
+            <code className="font-mono text-xs">whatsapp.message.send</code>. Montagem típica a partir do evento
+            recebido: <code className="font-mono text-xs">messageId</code>,{' '}
+            <code className="font-mono text-xs">chatJid</code>, <code className="font-mono text-xs">senderJid</code>{' '}
+            → <code className="font-mono text-xs">participant</code>, <code className="font-mono text-xs">text</code>.
+          </p>
+          <p className="text-outline text-xs">
             200: mensagem enviada. 400: validação, destino inválido ou sem WhatsApp. 403: limite diário do plano
             grátis atingido (envios com sucesso, janela UTC; configurável com{' '}
             <code className="font-mono">FREE_DAILY_SEND_LIMIT</code>). 503: sessão não conectada.
@@ -978,7 +1007,13 @@ socket.on('whatsapp.message.received', (payload) => {
   const dest = payload.from
     ? { phoneNumber: payload.from, text: 'Sua resposta aqui' }
     : { chatJid: payload.chatJid, text: 'Sua resposta aqui' };
-  socket.emit('whatsapp.message.send', dest, (ack) => console.log(ack));
+  const replyTo = {
+    messageId: payload.messageId,
+    chatJid: payload.chatJid,
+    participant: payload.senderJid || null,
+    text: payload.text || undefined,
+  };
+  socket.emit('whatsapp.message.send', { ...dest, replyTo }, (ack) => console.log(ack));
 
   // payload: WhatsAppIncomingMessageEvent — ver secção "Payload: mensagem recebida"
   // Com mídia (imagem/vídeo/documento/áudio), payload.media traz fileBuffer + mimeType + fileName
@@ -993,7 +1028,8 @@ socket.on('whatsapp.message.received', (payload) => {
 });`}</CodeBlock>
           <p>
             Eventos principais: <code className="font-mono text-xs">whatsapp.message.send</code> (texto; destino via{' '}
-            <code className="font-mono text-xs">phoneNumber</code> ou <code className="font-mono text-xs">chatJid</code>)
+            <code className="font-mono text-xs">phoneNumber</code> ou <code className="font-mono text-xs">chatJid</code>;
+            citação opcional via <code className="font-mono text-xs">replyTo</code>)
             e{' '}
             <code className="font-mono text-xs">whatsapp.message.received</code> (texto e mídia recebida, incluindo notas de voz). A forma de{' '}
             <code className="font-mono text-xs">whatsapp.message.received</code> é a descrita em{' '}
